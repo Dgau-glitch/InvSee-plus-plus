@@ -34,6 +34,7 @@ public class ServerSoftware {
             CRAFTBUKKIT_26_1_1 = new ServerSoftware(CRAFTBUKKIT, _26_1_1),
             CRAFTBUKKIT_26_1_2 = new ServerSoftware(CRAFTBUKKIT, _26_1_2),
             PAPER_1_21_11 = new ServerSoftware(PAPER, _1_21_11),
+            FOLIA_1_21_11 = new ServerSoftware(FOLIA, _1_21_11),
             PAPER_26_1_1 = new ServerSoftware(PAPER, _26_1_1),
             PAPER_26_1_2 = new ServerSoftware(PAPER, _26_1_2),
             GLOWSTONE_1_8_8 = new ServerSoftware(GLOWSTONE, _1_8_8),
@@ -49,6 +50,7 @@ public class ServerSoftware {
     }
 
     public static ServerSoftware detect(final Server server) {
+        final boolean folia = isFolia();
         final String serverClassName = server.getClass().getName();
         switch (serverClassName) {
             case "org.bukkit.craftbukkit.v1_8_R3.CraftServer":
@@ -153,7 +155,8 @@ public class ServerSoftware {
                 // CraftBukkit 26.1 and up or Paper 1.20.4 and up:
                 try {
                     // Call Server#getMinecraftVersion() to find out the version (this method was added by Paper).
-                    return new ServerSoftware(PAPER, MinecraftVersion.fromString(server.getMinecraftVersion()));
+                    MinecraftPlatform platform = folia ? FOLIA : PAPER;
+                    return new ServerSoftware(platform, MinecraftVersion.fromString(server.getMinecraftVersion()));
                 } catch (NoSuchMethodError nsme) {
                     // Apparently we are not running on Paper
                     switch (CraftbukkitMappingsVersion.getMappingsVersion(server)) {
@@ -189,6 +192,22 @@ public class ServerSoftware {
         }
 
         return null;
+    }
+
+    /**
+     * Folia exposes its regionized server marker class as part of its runtime.
+     * Keeping this check here makes scheduler selection and server software
+     * detection share the same source of truth.
+     *
+     * @return true when the current runtime is Folia, false otherwise.
+     */
+    public static boolean isFolia() {
+        try {
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     @Override

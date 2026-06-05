@@ -18,6 +18,22 @@
 
 Каждый пункт ниже — отдельная задача, которую можно выдать одним сообщением. Не переходить к следующему пункту, пока предыдущий не собран и не проверен. После каждой задачи запускать минимально релевантную сборку/тесты и фиксировать регрессии в плане.
 
+## Статус выполненных задач
+
+### Задача 1 — build-конфигурация Folia 1.21.11
+
+- Выполнено: `InvSee++_Plugin/pom.xml` использует `dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT` со scope `provided`; это Maven-эквивалент Gradle-зависимости `compileOnly("dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT")`.
+- Проверено по конфигурации: Folia API не должен попадать в shaded jar, потому что зависимость объявлена как `provided`, а не `compile`.
+- Решение по модулям: `InvSee++_Common` пока остается на `paper-api`/Bukkit API и не получает прямую зависимость на `folia-api`, потому что публичный common API не принимает Folia-специфичные типы; это снижает связанность и не протекает runtime scheduler-детали в API.
+- Paper/Bukkit/NMS platform modules остаются на своих текущих API до задач 3–14, где будет спроектирован общий scheduler/service layer и отдельный Folia-safe runtime path.
+
+### Задача 2 — явное определение Folia как платформы выполнения
+
+- Выполнено: в модель платформ добавлен `FOLIA`, а определение Folia вынесено в общий detector server software.
+- Выполнено: локальная проверка `RegionizedServer` удалена из выбора scheduler; `InvseePlusPlus` теперь выбирает `FoliaScheduler` через `ServerSoftware.detect(...)`.
+- Выполнено: Folia 1.21.11 зарегистрирована на базе paper-реализации 1.21.11 только как implementation provider, без утверждения о полной thread-safety до выполнения следующих задач плана.
+- Ожидаемое поведение: на Folia 1.21.11 лог detection должен показывать `Folia version 1.21.11`, на Paper detection остается `Paper version ...`, а unsupported-version сообщения теперь имеют отдельную платформу `Folia`.
+
 ## Задачи миграции
 
 ### 1. Обновить build-конфигурацию под Folia 1.21.11

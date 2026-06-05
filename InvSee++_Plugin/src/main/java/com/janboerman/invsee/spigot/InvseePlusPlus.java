@@ -25,6 +25,8 @@ import com.janboerman.invsee.spigot.internal.NamesAndUUIDs;
 import com.janboerman.invsee.spigot.internal.OpenSpectatorsCache;
 import com.janboerman.invsee.spigot.api.Scheduler;
 import com.janboerman.invsee.spigot.internal.resolve.ResolveStrategyType;
+import com.janboerman.invsee.spigot.internal.version.MinecraftPlatform;
+import com.janboerman.invsee.spigot.internal.version.ServerSoftware;
 import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventoryHook;
 import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventorySeeApi;
 
@@ -427,15 +429,8 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
     }
 
     private static Scheduler makeScheduler(InvseePlusPlus plugin) {
-        boolean folia;
-        try {
-            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
-            folia = true;
-        } catch (ClassNotFoundException e) {
-            folia = false;
-        }
-
-        if (folia) {
+        ServerSoftware serverSoftware = ServerSoftware.detect(plugin.getServer());
+        if (serverSoftware != null && serverSoftware.getPlatform() == MinecraftPlatform.FOLIA) {
             return new FoliaScheduler(plugin);
         } else {
             return new DefaultScheduler(plugin);

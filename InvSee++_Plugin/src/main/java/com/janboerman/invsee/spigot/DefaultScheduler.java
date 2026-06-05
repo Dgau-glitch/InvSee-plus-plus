@@ -1,7 +1,10 @@
 package com.janboerman.invsee.spigot;
 
 import com.janboerman.invsee.spigot.api.Scheduler;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.HumanEntity;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.UUID;
 
@@ -17,48 +20,106 @@ public class DefaultScheduler implements Scheduler {
     }
 
     @Override
-    public void executeSyncPlayer(UUID playerId, Runnable task, Runnable retired) {
-        executeSync(task);
-    }
-
-    public void executeSyncPlayer(HumanEntity player, Runnable task, Runnable retired) {
-        executeSync(task);
+    public TaskHandle runEntity(UUID playerId, Runnable task, Runnable retired) {
+        return runGlobal(task);
     }
 
     @Override
-    public void executeSyncGlobal(Runnable task) {
-        executeSync(task);
+    public TaskHandle runEntity(HumanEntity entity, Runnable task, Runnable retired) {
+        return runGlobal(task);
     }
 
     @Override
-    public void executeSyncGlobalRepeatedly(Runnable task, long ticksInitialDelay, long ticksPeriod) {
-        plugin.getServer().getScheduler().runTaskTimer(plugin, task, ticksInitialDelay, ticksPeriod);
+    public TaskHandle runEntityDelayed(HumanEntity entity, Runnable task, Runnable retired, long delayTicks) {
+        return runGlobalDelayed(task, delayTicks);
     }
 
-    private void executeSync(Runnable task) {
+    @Override
+    public TaskHandle runEntityRepeatedly(HumanEntity entity, Runnable task, Runnable retired, long initialDelayTicks, long periodTicks) {
+        return runGlobalRepeatedly(task, initialDelayTicks, periodTicks);
+    }
+
+    @Override
+    public TaskHandle runGlobal(Runnable task) {
         if (plugin.getServer().isPrimaryThread()) {
             task.run();
+            return Scheduler.completedTask();
         } else {
-            plugin.getServer().getScheduler().runTask(plugin, task);
+            return bukkitTask(plugin.getServer().getScheduler().runTask(plugin, task));
         }
     }
 
     @Override
-    public void executeAsync(Runnable task) {
+    public TaskHandle runGlobalRepeatedly(Runnable task, long ticksInitialDelay, long ticksPeriod) {
+        return bukkitTask(plugin.getServer().getScheduler().runTaskTimer(plugin, task, ticksInitialDelay, ticksPeriod));
+    }
+
+    @Override
+    public TaskHandle runAsync(Runnable task) {
         if (!plugin.getServer().isPrimaryThread()) {
             task.run();
+            return Scheduler.completedTask();
         } else {
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+            return bukkitTask(plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task));
         }
     }
 
     @Override
-    public void executeLaterGlobal(Runnable task, long delayTicks) {
-        plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks);
+    public TaskHandle runAsyncRepeatedly(Runnable task, long initialDelayTicks, long periodTicks) {
+        return bukkitTask(plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, task, initialDelayTicks, periodTicks));
     }
 
     @Override
-    public void executeLaterAsync(Runnable task, long delayTicks) {
-        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, task, delayTicks);
+    public TaskHandle runGlobalDelayed(Runnable task, long delayTicks) {
+        return bukkitTask(plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks));
+    }
+
+    @Override
+    public TaskHandle runAsyncDelayed(Runnable task, long delayTicks) {
+        return bukkitTask(plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, task, delayTicks));
+    }
+
+    @Override
+    public TaskHandle runRegion(Location location, Runnable task) {
+        return runGlobal(task);
+    }
+
+    @Override
+    public TaskHandle runRegion(World world, int chunkX, int chunkZ, Runnable task) {
+        return runGlobal(task);
+    }
+
+    @Override
+    public TaskHandle runRegionDelayed(Location location, Runnable task, long delayTicks) {
+        return runGlobalDelayed(task, delayTicks);
+    }
+
+    @Override
+    public TaskHandle runRegionRepeatedly(Location location, Runnable task, long initialDelayTicks, long periodTicks) {
+        return runGlobalRepeatedly(task, initialDelayTicks, periodTicks);
+    }
+
+    private static TaskHandle bukkitTask(BukkitTask task) {
+        return new BukkitTaskHandle(task);
+    }
+
+    private static final class BukkitTaskHandle implements TaskHandle {
+
+        private final BukkitTask task;
+
+        private BukkitTaskHandle(BukkitTask task) {
+            this.task = task;
+        }
+
+        @Override
+        public boolean cancel() {
+            task.cancel();
+            return true;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return task.isCancelled();
+        }
     }
 }

@@ -34,6 +34,18 @@
 - Выполнено: Folia 1.21.11 зарегистрирована на базе paper-реализации 1.21.11 только как implementation provider, без утверждения о полной thread-safety до выполнения следующих задач плана.
 - Ожидаемое поведение: на Folia 1.21.11 лог detection должен показывать `Folia version 1.21.11`, на Paper detection остается `Paper version ...`, а unsupported-version сообщения теперь имеют отдельную платформу `Folia`.
 
+### Задача 3 — новая DRY-абстракция планировщика
+
+- Выполнено: `Scheduler` расширен модульными `run*`-операциями для global, async, entity и region scopes, включая delayed/repeating варианты там, где они нужны для Folia-safe ownership model.
+- Выполнено: добавлен общий `TaskHandle` для cancellable tasks; legacy `execute*` методы оставлены как deprecated compatibility adapter для `InvseeAPI#getScheduler()` и существующих аддонов/платформенных модулей.
+- Выполнено: callers не зависят от Paper/Folia типов — публичный contract использует Bukkit `Location`, `World`, `HumanEntity`, `UUID` и обычные `Runnable`.
+
+### Задача 4 — FoliaScheduler 1.21.11 поверх Global/Async/Region/Entity scheduler
+
+- Выполнено: `FoliaScheduler` использует `GlobalRegionScheduler` для global tasks, `AsyncScheduler` для async tasks, `RegionScheduler` для location/chunk-owned work и `EntityScheduler` для player/entity-owned work.
+- Выполнено: delayed/repeating операции возвращают `TaskHandle`, который адаптирует Folia `ScheduledTask#cancel()`/`isCancelled()`.
+- Выполнено: `runEntity(UUID, ...)` больше не падает обратно на global scheduler при offline/retired player; вместо этого вызывается `retired` callback, если он задан, и возвращается unscheduled handle.
+
 ## Задачи миграции
 
 ### 1. Обновить build-конфигурацию под Folia 1.21.11

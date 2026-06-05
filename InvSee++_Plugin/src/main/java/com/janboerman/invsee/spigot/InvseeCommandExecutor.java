@@ -76,7 +76,7 @@ public class InvseeCommandExecutor implements CommandExecutor {
 
             Either<String, PwiCommandArgs> either = PwiCommandArgs.parse(pwiArgument, pwiApi.getHook());
             if (either.isLeft()) {
-                player.sendMessage(ChatColor.RED + either.getLeft());
+                send(player, ChatColor.RED + either.getLeft());
                 return true;
             }
 
@@ -107,7 +107,7 @@ public class InvseeCommandExecutor implements CommandExecutor {
 
             Either<String, MviCommandArgs> either = MviCommandArgs.parse(mviArgument, mviApi.getHook());
             if (either.isLeft()) {
-                player.sendMessage(ChatColor.RED + either.getLeft());
+                send(player, ChatColor.RED + either.getLeft());
                 return true;
             }
 
@@ -136,9 +136,20 @@ public class InvseeCommandExecutor implements CommandExecutor {
 
         if (pwiFuture != null) {
             //PWI future is not null - open the inventory!
-            fut = pwiFuture.thenApply(response -> response.isSuccess()
-                        ? ((PerWorldInventorySeeApi) api).openMainSpectatorInventory(player, response.getInventory(), creationOptions)
-                        : OpenResponse.closed(NotOpenedReason.notCreated(response.getReason())));
+            fut = pwiFuture.thenCompose(response -> {
+                if (!response.isSuccess()) {
+                    return CompletableFuture.completedFuture(OpenResponse.closed(NotOpenedReason.notCreated(response.getReason())));
+                }
+                CompletableFuture<OpenResponse<MainSpectatorInventoryView>> openFuture = new CompletableFuture<>();
+                api.getScheduler().runEntity(player, () -> {
+                    try {
+                        openFuture.complete(((PerWorldInventorySeeApi) api).openMainSpectatorInventory(player, response.getInventory(), creationOptions));
+                    } catch (Throwable throwable) {
+                        openFuture.completeExceptionally(throwable);
+                    }
+                }, () -> openFuture.complete(OpenResponse.closed(NotOpenedReason.generic())));
+                return openFuture;
+            });
         }
 
         //TODO else if (mviFuture != null) { ... }
@@ -161,36 +172,40 @@ public class InvseeCommandExecutor implements CommandExecutor {
         //Gracefully handle failure and faults.
         fut.whenComplete((response, throwable) -> {
             if (throwable != null) {
-                player.sendMessage(ChatColor.RED + "An error occurred while trying to open " + playerNameOrUUID + "'s inventory.");
+                send(player, ChatColor.RED + "An error occurred while trying to open " + playerNameOrUUID + "'s inventory.");
                 plugin.getLogger().log(Level.SEVERE, "Error while trying to create main-inventory spectator inventory", throwable);
             } else {
                 if (!response.isOpen()) {
                     NotOpenedReason notOpenedReason = response.getReason();
                     if (notOpenedReason instanceof InventoryOpenEventCancelled) {
-                        player.sendMessage(ChatColor.RED + "Another plugin prevented you from spectating " + playerNameOrUUID + "'s inventory");
+                        send(player, ChatColor.RED + "Another plugin prevented you from spectating " + playerNameOrUUID + "'s inventory");
                     } else if (notOpenedReason instanceof InventoryNotCreated) {
                         NotCreatedReason notCreatedReason = ((InventoryNotCreated) notOpenedReason).getNotCreatedReason();
                         if (notCreatedReason instanceof TargetDoesNotExist) {
-                            player.sendMessage(ChatColor.RED + "Player " + playerNameOrUUID + " does not exist.");
+                            send(player, ChatColor.RED + "Player " + playerNameOrUUID + " does not exist.");
                         } else if (notCreatedReason instanceof UnknownTarget) {
-                            player.sendMessage(ChatColor.RED + "Player " + playerNameOrUUID + " has not logged onto the server yet.");
+                            send(player, ChatColor.RED + "Player " + playerNameOrUUID + " has not logged onto the server yet.");
                         }  else if (notCreatedReason instanceof TargetHasExemptPermission) {
-                            player.sendMessage(ChatColor.RED + "Player " + playerNameOrUUID + " is exempted from being spectated.");
+                            send(player, ChatColor.RED + "Player " + playerNameOrUUID + " is exempted from being spectated.");
                         } else if (notCreatedReason instanceof ImplementationFault) {
-                            player.sendMessage(ChatColor.RED + "An internal fault occurred when trying to load " + playerNameOrUUID + "'s inventory.");
+                            send(player, ChatColor.RED + "An internal fault occurred when trying to load " + playerNameOrUUID + "'s inventory.");
                         } else if (notCreatedReason instanceof OfflineSupportDisabled) {
-                            player.sendMessage(ChatColor.RED + "Spectating offline players' inventories is disabled.");
+                            send(player, ChatColor.RED + "Spectating offline players' inventories is disabled.");
                         } else {
-                            player.sendMessage(ChatColor.RED + "Could not create " + playerNameOrUUID + "'s inventory for an unknown reason.");
+                            send(player, ChatColor.RED + "Could not create " + playerNameOrUUID + "'s inventory for an unknown reason.");
                         }
                     } else {
-                        player.sendMessage(ChatColor.RED + "Could not open " + playerNameOrUUID + "'s inventory for an unknown reason.");
+                        send(player, ChatColor.RED + "Could not open " + playerNameOrUUID + "'s inventory for an unknown reason.");
                     }
                 } //else: it opened successfully: nothing to do there!
             }
         });
 
         return true;
+    }
+
+    private void send(Player player, String message) {
+        plugin.getApi().getScheduler().runEntity(player, () -> player.sendMessage(message), null);
     }
 
 }

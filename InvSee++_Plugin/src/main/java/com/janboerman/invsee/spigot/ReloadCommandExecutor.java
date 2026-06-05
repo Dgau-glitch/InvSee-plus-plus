@@ -4,6 +4,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.jetbrains.annotations.NotNull;
@@ -27,8 +28,17 @@ public final class ReloadCommandExecutor implements CommandExecutor {
         reloadPlugin(pluginManager, "InvSeePlusPlus_Clear");
         reloadPlugin(pluginManager, "InvSeePlusPlus_Clone");
 
-        sender.sendMessage(ChatColor.GREEN + "InvSee++ configuration was reloaded.");
+        send(sender, ChatColor.GREEN + "InvSee++ configuration was reloaded.");
         return true;
+    }
+
+    private void send(CommandSender sender, String message) {
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            plugin.getApi().getScheduler().runEntity(player, () -> player.sendMessage(message), null);
+        } else {
+            sender.sendMessage(message);
+        }
     }
 
     private static void reloadPlugin(PluginManager pluginManager, String pluginName) {

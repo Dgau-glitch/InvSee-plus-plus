@@ -829,12 +829,14 @@ public class InvseeAPI {
         future.whenComplete((SpectateResponse<MainSpectatorInventory> response, Throwable throwable) -> {
             if (throwable == null) {
                 if (response.isSuccess()) {
-                    try {
-                        OpenResponse<MainSpectatorInventoryView> openResponse = platform.openMainSpectatorInventory(spectator, response.getInventory(), options);
-                        result.complete(openResponse);
-                    } catch (Throwable ex) {
-                        result.completeExceptionally(ex);
-                    }
+                    scheduler.runEntity(spectator, () -> {
+                        try {
+                            OpenResponse<MainSpectatorInventoryView> openResponse = platform.openMainSpectatorInventory(spectator, response.getInventory(), options);
+                            result.complete(openResponse);
+                        } catch (Throwable ex) {
+                            result.completeExceptionally(ex);
+                        }
+                    }, () -> result.complete(OpenResponse.closed(NotOpenedReason.generic())));
                 } else {
                     result.complete(OpenResponse.closed(NotOpenedReason.notCreated(response.getReason())));
                 }
@@ -850,12 +852,14 @@ public class InvseeAPI {
         future.whenComplete((SpectateResponse<EnderSpectatorInventory> response, Throwable throwable) -> {
             if (throwable == null) {
                 if (response.isSuccess()) {
-                    try {
-                        OpenResponse<EnderSpectatorInventoryView> openResponse = platform.openEnderSpectatorInventory(spectator, response.getInventory(), options);
-                        result.complete(openResponse);
-                    } catch (Throwable ex) {
-                        result.completeExceptionally(ex);
-                    }
+                    scheduler.runEntity(spectator, () -> {
+                        try {
+                            OpenResponse<EnderSpectatorInventoryView> openResponse = platform.openEnderSpectatorInventory(spectator, response.getInventory(), options);
+                            result.complete(openResponse);
+                        } catch (Throwable ex) {
+                            result.completeExceptionally(ex);
+                        }
+                    }, () -> result.complete(OpenResponse.closed(NotOpenedReason.generic())));
                 } else {
                     result.complete(OpenResponse.closed(NotOpenedReason.notCreated(response.getReason())));
                 }
@@ -909,8 +913,11 @@ public class InvseeAPI {
                 } else {
                     //does not support shallow copying, just close and re-open, and update the cache!
                     for (HumanEntity viewer : Compat.listCopy(oldMainSpectator.getViewers())) {
-                        viewer.closeInventory();
-                        viewer.openInventory(newInventorySpectator);
+                        MainSpectatorInventory inventoryToOpen = newInventorySpectator;
+                        scheduler.runEntity(viewer, () -> {
+                            viewer.closeInventory();
+                            viewer.openInventory(inventoryToOpen);
+                        }, null);
                     }
                     openSpectatorsCache.cache(newInventorySpectator, true);
                 }
@@ -929,8 +936,11 @@ public class InvseeAPI {
                 } else {
                     //does not support shallow copying, just close and re-open, and update the cache!
                     for (HumanEntity viewer : Compat.listCopy(oldEnderSpectator.getViewers())) {
-                        viewer.closeInventory();
-                        viewer.openInventory(newEnderSpectator);
+                        EnderSpectatorInventory inventoryToOpen = newEnderSpectator;
+                        scheduler.runEntity(viewer, () -> {
+                            viewer.closeInventory();
+                            viewer.openInventory(inventoryToOpen);
+                        }, null);
                     }
                     openSpectatorsCache.cache(newEnderSpectator, true);
                 }
@@ -967,7 +977,7 @@ public class InvseeAPI {
                     saveInventory(spectatorInventory).whenComplete((voidResult, throwable) -> {
                         if (throwable != null) {
                             plugin.getLogger().log(Level.SEVERE, "Error while saving offline inventory", throwable);
-                            event.getPlayer().sendMessage(ChatColor.RED + "Something went wrong when trying to save the inventory.");
+                            send(event.getPlayer(), ChatColor.RED + "Something went wrong when trying to save the inventory.");
                         }
                     }); //idem: don't remove from cache.
                 }
@@ -978,7 +988,7 @@ public class InvseeAPI {
                     saveEnderChest(spectatorInventory).whenComplete((voidResult, throwable) -> {
                         if (throwable != null) {
                             plugin.getLogger().log(Level.SEVERE, "Error while saving offline enderchest", throwable);
-                            event.getPlayer().sendMessage(ChatColor.RED + "Something went wrong when trying to save the enderchest.");
+                            send(event.getPlayer(), ChatColor.RED + "Something went wrong when trying to save the enderchest.");
                         }
                     }); //idem: don't remove from cache.
                 }
@@ -1009,6 +1019,10 @@ public class InvseeAPI {
 
     }
 
+    private void send(HumanEntity player, String message) {
+        scheduler.runEntity(player, () -> player.sendMessage(message), null);
+    }
+
 
     //
     // =================================== REALM OF THE DEPRECATED ===================================
@@ -1032,44 +1046,44 @@ public class InvseeAPI {
     /** @deprecated use {@link #spectateInventory(Player, String, CreationOptions)} */
     @Deprecated public final CompletableFuture<Void> spectateInventory(Player spectator, String targetName, String title, boolean offlineSupport, Mirror<PlayerInventorySlot> mirror) {
         return spectateInventory(spectator, targetName, mainInventoryCreationOptions(spectator).withTitle(title).withOfflinePlayerSupport(offlineSupport).withMirror(mirror))
-                .whenComplete((either, throwable) -> handleMainInventoryExceptionsAndNotCreatedReasons(plugin, spectator, either, throwable, targetName))
+                .whenComplete((either, throwable) -> handleMainInventoryExceptionsAndNotCreatedReasons(spectator, either, throwable, targetName))
                 .thenApply(__ -> null);
     }
 
     /** @deprecated use {@link #spectateInventory(Player, UUID, String, CreationOptions)} */
     @Deprecated public final CompletableFuture<Void> spectateInventory(Player spectator, UUID targetId, String targetName, String title, boolean offlineSupport, Mirror<PlayerInventorySlot> mirror) {
         return spectateInventory(spectator, targetId, targetName, mainInventoryCreationOptions(spectator).withTitle(title).withOfflinePlayerSupport(offlineSupport).withMirror(mirror))
-                .whenComplete((either, throwable) -> handleMainInventoryExceptionsAndNotCreatedReasons(plugin, spectator, either, throwable, targetId.toString()))
+                .whenComplete((either, throwable) -> handleMainInventoryExceptionsAndNotCreatedReasons(spectator, either, throwable, targetId.toString()))
                 .thenApply(__ -> null);
     }
 
-    private static <SIV extends SpectatorInventoryView<?>> void handleMainInventoryExceptionsAndNotCreatedReasons(Plugin plugin, Player spectator, OpenResponse<SIV> openResponse, Throwable throwable, String targetNameOrUuid) {
+    private <SIV extends SpectatorInventoryView<?>> void handleMainInventoryExceptionsAndNotCreatedReasons(Player spectator, OpenResponse<SIV> openResponse, Throwable throwable, String targetNameOrUuid) {
         if (throwable == null) {
             if (!openResponse.isOpen()) {
                 NotOpenedReason notOpenedReason = openResponse.getReason();
                 if (notOpenedReason instanceof InventoryOpenEventCancelled) {
-                    spectator.sendMessage(ChatColor.RED + "Another plugin prevented you from spectating " + targetNameOrUuid + "'s inventory");
+                    send(spectator, ChatColor.RED + "Another plugin prevented you from spectating " + targetNameOrUuid + "'s inventory");
                 } else if (notOpenedReason instanceof InventoryNotCreated) {
                     NotCreatedReason notCreatedReason = ((InventoryNotCreated) notOpenedReason).getNotCreatedReason();
                     if (notCreatedReason instanceof TargetDoesNotExist) {
-                        spectator.sendMessage(ChatColor.RED + "Player " + targetNameOrUuid + " does not exist.");
+                        send(spectator, ChatColor.RED + "Player " + targetNameOrUuid + " does not exist.");
                     } else if (notCreatedReason instanceof UnknownTarget) {
-                        spectator.sendMessage(ChatColor.RED + "Player " + targetNameOrUuid + " has not logged onto the server yet.");
+                        send(spectator, ChatColor.RED + "Player " + targetNameOrUuid + " has not logged onto the server yet.");
                     }  else if (notCreatedReason instanceof TargetHasExemptPermission) {
-                        spectator.sendMessage(ChatColor.RED + "Player " + targetNameOrUuid + " is exempted from being spectated.");
+                        send(spectator, ChatColor.RED + "Player " + targetNameOrUuid + " is exempted from being spectated.");
                     } else if (notCreatedReason instanceof ImplementationFault) {
-                        spectator.sendMessage(ChatColor.RED + "An internal fault occurred when trying to load " + targetNameOrUuid + "'s inventory.");
+                        send(spectator, ChatColor.RED + "An internal fault occurred when trying to load " + targetNameOrUuid + "'s inventory.");
                     } else if (notCreatedReason instanceof OfflineSupportDisabled) {
-                        spectator.sendMessage(ChatColor.RED + "Spectating offline players' inventories is disabled.");
+                        send(spectator, ChatColor.RED + "Spectating offline players' inventories is disabled.");
                     } else {
-                        spectator.sendMessage(ChatColor.RED + "Could not create " + targetNameOrUuid + "'s inventory for an unknown reason.");
+                        send(spectator, ChatColor.RED + "Could not create " + targetNameOrUuid + "'s inventory for an unknown reason.");
                     }
                 } else {
-                    spectator.sendMessage(ChatColor.RED + "Could not open " + targetNameOrUuid + "'s inventory for an unknown reason.");
+                    send(spectator, ChatColor.RED + "Could not open " + targetNameOrUuid + "'s inventory for an unknown reason.");
                 }
             }
         } else {
-            spectator.sendMessage(ChatColor.RED + "An error occurred while trying to open " + targetNameOrUuid + "'s inventory.");
+            send(spectator, ChatColor.RED + "An error occurred while trying to open " + targetNameOrUuid + "'s inventory.");
             plugin.getLogger().log(Level.SEVERE, "Error while trying to create main-inventory spectator inventory", throwable);
         }
     }
@@ -1077,44 +1091,44 @@ public class InvseeAPI {
     /** @deprecated use {@link #spectateEnderChest(Player, String, CreationOptions)} */
     @Deprecated public final CompletableFuture<Void> spectateEnderChest(Player spectator, String targetName, String title, boolean offlineSupport, Mirror<EnderChestSlot> mirror) {
         return spectateEnderChest(spectator, targetName, enderInventoryCreationOptions(spectator).withTitle(title).withOfflinePlayerSupport(offlineSupport).withMirror(mirror))
-                .whenComplete((either, throwable) -> handleEnderInventoryExceptionsAndNotCreatedReasons(plugin, spectator, either, throwable, targetName))
+                .whenComplete((either, throwable) -> handleEnderInventoryExceptionsAndNotCreatedReasons(spectator, either, throwable, targetName))
                 .thenApply(__ -> null);
     }
 
     /** @deprecated use {@link #spectateEnderChest(Player, UUID, String, CreationOptions)} */
     @Deprecated public final CompletableFuture<Void> spectateEnderChest(Player spectator, UUID targetId, String targetName, String title, boolean offlineSupport, Mirror<EnderChestSlot> mirror) {
         return spectateEnderChest(spectator, targetId, targetName, enderInventoryCreationOptions(spectator).withTitle(title).withOfflinePlayerSupport(offlineSupport).withMirror(mirror))
-                .whenComplete((either, throwable) -> handleEnderInventoryExceptionsAndNotCreatedReasons(plugin, spectator, either, throwable, targetId.toString()))
+                .whenComplete((either, throwable) -> handleEnderInventoryExceptionsAndNotCreatedReasons(spectator, either, throwable, targetId.toString()))
                 .thenApply(__ -> null);
     }
 
-    private static <SIV extends SpectatorInventoryView<?>> void handleEnderInventoryExceptionsAndNotCreatedReasons(Plugin plugin, Player spectator, OpenResponse<SIV> openResponse, Throwable throwable, String targetNameOrUuid) {
+    private <SIV extends SpectatorInventoryView<?>> void handleEnderInventoryExceptionsAndNotCreatedReasons(Player spectator, OpenResponse<SIV> openResponse, Throwable throwable, String targetNameOrUuid) {
         if (throwable == null) {
             if (!openResponse.isOpen()) {
                 NotOpenedReason notOpenedReason = openResponse.getReason();
                 if (notOpenedReason instanceof InventoryOpenEventCancelled) {
-                    spectator.sendMessage(ChatColor.RED + "Another plugin prevented you from spectating " + targetNameOrUuid + "'s ender chest.");
+                    send(spectator, ChatColor.RED + "Another plugin prevented you from spectating " + targetNameOrUuid + "'s ender chest.");
                 } else if (notOpenedReason instanceof InventoryNotCreated) {
                     NotCreatedReason reason = ((InventoryNotCreated) notOpenedReason).getNotCreatedReason();
                     if (reason instanceof TargetDoesNotExist) {
-                        spectator.sendMessage(ChatColor.RED + "Player " + targetNameOrUuid + " does not exist.");
+                        send(spectator, ChatColor.RED + "Player " + targetNameOrUuid + " does not exist.");
                     } else if (reason instanceof UnknownTarget) {
-                        spectator.sendMessage(ChatColor.RED + "Player " + targetNameOrUuid + " has not logged onto the server yet.");
+                        send(spectator, ChatColor.RED + "Player " + targetNameOrUuid + " has not logged onto the server yet.");
                     } else if (reason instanceof TargetHasExemptPermission) {
-                        spectator.sendMessage(ChatColor.RED + "Player " + targetNameOrUuid + " is exempted from being spectated.");
+                        send(spectator, ChatColor.RED + "Player " + targetNameOrUuid + " is exempted from being spectated.");
                     } else if (reason instanceof ImplementationFault) {
-                        spectator.sendMessage(ChatColor.RED + "An internal fault occurred when trying to load " + targetNameOrUuid + "'s enderchest.");
+                        send(spectator, ChatColor.RED + "An internal fault occurred when trying to load " + targetNameOrUuid + "'s enderchest.");
                     } else if (reason instanceof OfflineSupportDisabled) {
-                        spectator.sendMessage(ChatColor.RED + "Spectating offline players' enderchests is disabled.");
+                        send(spectator, ChatColor.RED + "Spectating offline players' enderchests is disabled.");
                     } else {
-                        spectator.sendMessage(ChatColor.RED + "Could not create " + targetNameOrUuid + "'s enderchest for an unknown reason.");
+                        send(spectator, ChatColor.RED + "Could not create " + targetNameOrUuid + "'s enderchest for an unknown reason.");
                     }
                 } else {
-                    spectator.sendMessage(ChatColor.RED + "Could not open " + targetNameOrUuid + "'s enderchest for an unknown reason.");
+                    send(spectator, ChatColor.RED + "Could not open " + targetNameOrUuid + "'s enderchest for an unknown reason.");
                 }
             }
         } else {
-            spectator.sendMessage(ChatColor.RED + "An error occurred while trying to open " + targetNameOrUuid + "'s enderchest.");
+            send(spectator, ChatColor.RED + "An error occurred while trying to open " + targetNameOrUuid + "'s enderchest.");
             plugin.getLogger().log(Level.SEVERE, "Error while trying to create ender-chest spectator inventory", throwable);
         }
     }

@@ -83,7 +83,7 @@ public class EnderseeCommandExecutor implements CommandExecutor {
 
             Either<String, PwiCommandArgs> either = PwiCommandArgs.parse(pwiArgument, pwiApi.getHook());
             if (either.isLeft()) {
-                player.sendMessage(ChatColor.RED + either.getLeft());
+                send(player, ChatColor.RED + either.getLeft());
                 return true;
             }
 
@@ -113,9 +113,20 @@ public class EnderseeCommandExecutor implements CommandExecutor {
         CompletableFuture<OpenResponse<EnderSpectatorInventoryView>> fut;
 
         if (pwiFuture != null) {
-            fut = pwiFuture.thenApply(response -> response.isSuccess()
-                    ? ((PerWorldInventorySeeApi) api).openEnderSpectatorInventory(player, response.getInventory(), creationOptions)
-                    : OpenResponse.closed(NotOpenedReason.notCreated(response.getReason())));
+            fut = pwiFuture.thenCompose(response -> {
+                if (!response.isSuccess()) {
+                    return CompletableFuture.completedFuture(OpenResponse.closed(NotOpenedReason.notCreated(response.getReason())));
+                }
+                CompletableFuture<OpenResponse<EnderSpectatorInventoryView>> openFuture = new CompletableFuture<>();
+                api.getScheduler().runEntity(player, () -> {
+                    try {
+                        openFuture.complete(((PerWorldInventorySeeApi) api).openEnderSpectatorInventory(player, response.getInventory(), creationOptions));
+                    } catch (Throwable throwable) {
+                        openFuture.completeExceptionally(throwable);
+                    }
+                }, () -> openFuture.complete(OpenResponse.closed(NotOpenedReason.generic())));
+                return openFuture;
+            });
         }
 
         //TODO else if (mviFuture != null) { ... }
@@ -135,36 +146,40 @@ public class EnderseeCommandExecutor implements CommandExecutor {
         //Gracefully handle failure and faults
         fut.whenComplete((openResponse, throwable) -> {
             if (throwable != null) {
-                player.sendMessage(ChatColor.RED + "An error occurred while trying to open " + playerNameOrUUID + "'s enderchest.");
+                send(player, ChatColor.RED + "An error occurred while trying to open " + playerNameOrUUID + "'s enderchest.");
                 plugin.getLogger().log(Level.SEVERE, "Error while trying to create ender-chest spectator inventory", throwable);
             } else {
                 if (!openResponse.isOpen()) {
                     NotOpenedReason notOpenedReason = openResponse.getReason();
                     if (notOpenedReason instanceof InventoryOpenEventCancelled) {
-                        player.sendMessage(ChatColor.RED + "Another plugin prevented you from spectating " + playerNameOrUUID + "'s ender chest.");
+                        send(player, ChatColor.RED + "Another plugin prevented you from spectating " + playerNameOrUUID + "'s ender chest.");
                     } else if (notOpenedReason instanceof InventoryNotCreated) {
                         NotCreatedReason reason = ((InventoryNotCreated) notOpenedReason).getNotCreatedReason();
                         if (reason instanceof TargetDoesNotExist) {
-                            player.sendMessage(ChatColor.RED + "Player " + playerNameOrUUID + " does not exist.");
+                            send(player, ChatColor.RED + "Player " + playerNameOrUUID + " does not exist.");
                         } else if (reason instanceof UnknownTarget) {
-                            player.sendMessage(ChatColor.RED + "Player " + playerNameOrUUID + " has not logged onto the server yet.");
+                            send(player, ChatColor.RED + "Player " + playerNameOrUUID + " has not logged onto the server yet.");
                         } else if (reason instanceof TargetHasExemptPermission) {
-                            player.sendMessage(ChatColor.RED + "Player " + playerNameOrUUID + " is exempted from being spectated.");
+                            send(player, ChatColor.RED + "Player " + playerNameOrUUID + " is exempted from being spectated.");
                         } else if (reason instanceof ImplementationFault) {
-                            player.sendMessage(ChatColor.RED + "An internal fault occurred when trying to load " + playerNameOrUUID + "'s enderchest.");
+                            send(player, ChatColor.RED + "An internal fault occurred when trying to load " + playerNameOrUUID + "'s enderchest.");
                         } else if (reason instanceof OfflineSupportDisabled) {
-                            player.sendMessage(ChatColor.RED + "Spectating offline players' enderchests is disabled.");
+                            send(player, ChatColor.RED + "Spectating offline players' enderchests is disabled.");
                         } else {
-                            player.sendMessage(ChatColor.RED + "Could not create " + playerNameOrUUID + "'s enderchest for an unknown reason.");
+                            send(player, ChatColor.RED + "Could not create " + playerNameOrUUID + "'s enderchest for an unknown reason.");
                         }
                     } else {
-                        player.sendMessage(ChatColor.RED + "Could not open " + playerNameOrUUID + "'s enderchest for an unknown reason.");
+                        send(player, ChatColor.RED + "Could not open " + playerNameOrUUID + "'s enderchest for an unknown reason.");
                     }
                 } //else: it opened successfully: nothing to do there!
             }
         });
 
         return true;
+    }
+
+    private void send(Player player, String message) {
+        plugin.getApi().getScheduler().runEntity(player, () -> player.sendMessage(message), null);
     }
 
 }

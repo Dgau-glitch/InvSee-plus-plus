@@ -38,6 +38,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -501,10 +502,19 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String alias, String[] args) {
-        sender.sendMessage(ChatColor.YELLOW + "Oh no! It looks like InvSee++ didn't start correctly!");
-        sender.sendMessage(ChatColor.YELLOW + "Most likely this is a Minecraft/InvSee++ version mismatch.");
-        sender.sendMessage(ChatColor.YELLOW + "Check your logs for more information.");
+        send(sender, ChatColor.YELLOW + "Oh no! It looks like InvSee++ didn't start correctly!");
+        send(sender, ChatColor.YELLOW + "Most likely this is a Minecraft/InvSee++ version mismatch.");
+        send(sender, ChatColor.YELLOW + "Check your logs for more information.");
         return true;
+    }
+
+    private void send(CommandSender sender, String message) {
+        if (sender instanceof Player && api != null) {
+            Player player = (Player) sender;
+            api.getScheduler().runEntity(player, () -> player.sendMessage(message), null);
+        } else {
+            sender.sendMessage(message);
+        }
     }
 
     public Path getJarFilePath() {

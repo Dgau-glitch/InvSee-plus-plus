@@ -46,6 +46,17 @@
 - Выполнено: delayed/repeating операции возвращают `TaskHandle`, который адаптирует Folia `ScheduledTask#cancel()`/`isCancelled()`.
 - Выполнено: `runEntity(UUID, ...)` больше не падает обратно на global scheduler при offline/retired player; вместо этого вызывается `retired` callback, если он задан, и возвращается unscheduled handle.
 
+### Задача 5 — аудит Bukkit/NMS вызовов по thread ownership
+
+- Выполнено: добавлен отдельный аудит `FOLIA_THREAD_OWNERSHIP_AUDIT.md` с таблицами Bukkit/NMS ownership и third-party API ownership.
+- Выполнено: все неопределенные или небезопасные места вынесены в последующие задачи 7–13, включая NMS transaction model, online/offline split, caches, tab-completion и integrations.
+
+### Задача 6 — открытие/закрытие инвентарей и feedback через entity scheduler зрителя
+
+- Выполнено: async open futures в `InvseeAPI` завершают final `openMainSpectatorInventory`/`openEnderSpectatorInventory` на entity scheduler зрителя.
+- Выполнено: core join-transfer и PerWorldInventory profile-transfer закрывают/открывают viewer inventories через entity scheduler каждого viewer.
+- Выполнено: command feedback для player senders отправляется через entity scheduler; console sender остается direct global/command path.
+
 ## Задачи миграции
 
 ### 1. Обновить build-конфигурацию под Folia 1.21.11

@@ -26,6 +26,7 @@ import com.janboerman.invsee.spigot.internal.NamesAndUUIDs;
 import com.janboerman.invsee.spigot.internal.OpenSpectatorsCache;
 import com.janboerman.invsee.spigot.api.Scheduler;
 import com.janboerman.invsee.spigot.internal.resolve.ResolveStrategyType;
+import com.janboerman.invsee.spigot.internal.version.ServerSoftware;
 import com.janboerman.invsee.spigot.internal.version.MinecraftPlatform;
 import com.janboerman.invsee.spigot.internal.version.ServerSoftware;
 import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventoryHook;
@@ -102,7 +103,9 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         PerWorldInventoryHook pwiHook;
         //MultiverseInventoriesHook mviHook;
         if (offlinePlayerSupport() && (pwiHook = new PerWorldInventoryHook(this)).trySetup()) {
-            if (pwiHook.managesEitherInventory()) {
+            if (ServerSoftware.isFolia()) {
+                getLogger().warning("PerWorldInventory integration is disabled on Folia until its API thread-safety guarantees are verified. Core InvSee++ remains enabled.");
+            } else if (pwiHook.managesEitherInventory()) {
                 this.api = new PerWorldInventorySeeApi(this, lookup, scheduler, cache, platform, pwiHook);
                 getLogger().info("Enabled PerWorldInventory integration.");
             }

@@ -3,6 +3,7 @@ package com.janboerman.invsee.spigot.addon.give;
 import com.janboerman.invsee.spigot.addon.give.cmd.ArgParser;
 import com.janboerman.invsee.spigot.addon.give.cmd.ArgType;
 import com.janboerman.invsee.spigot.addon.give.common.GiveApi;
+import com.janboerman.invsee.spigot.internal.CommandSenderHelper;
 import com.janboerman.invsee.spigot.api.CreationOptions;
 import com.janboerman.invsee.spigot.api.InvseeAPI;
 import com.janboerman.invsee.spigot.api.MainSpectatorInventory;
@@ -55,7 +56,7 @@ class InvGiveExecutor implements CommandExecutor {
         CompletableFuture<Optional<String>> userNameFuture = futures.getSecond();
 
         Either<String, ItemStack> eitherStack = ArgParser.parseItem(giveApi, groupedArguments);
-        if (eitherStack.isLeft()) { sender.sendMessage(ChatColor.RED + eitherStack.getLeft()); return true; }
+        if (eitherStack.isLeft()) { CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + eitherStack.getLeft()); return true; }
         assert eitherStack.isRight();
 
         final ItemStack finalItems = eitherStack.getRight();
@@ -66,7 +67,7 @@ class InvGiveExecutor implements CommandExecutor {
 
         uuidFuture.<Optional<String>, Void>thenCombineAsync(userNameFuture, (optUuid, optName) -> {
             if (!optName.isPresent() || !optUuid.isPresent()) {
-                sender.sendMessage(ChatColor.RED + "Unknown player: " + inputPlayer);
+                CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "Unknown player: " + inputPlayer);
             } else {
                 String userName = optName.get();
                 UUID uuid = optUuid.get();
@@ -85,7 +86,7 @@ class InvGiveExecutor implements CommandExecutor {
                                 invseeApi.saveInventory(inventory).whenComplete((v, e) -> {
                                     if (e != null) plugin.getLogger().log(Level.SEVERE, "Could not save inventory", e);
                                 });
-                            sender.sendMessage(ChatColor.GREEN + "Added " + originalItems + " to " + userName + "'s inventory!");
+                            CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.GREEN + "Added " + originalItems + " to " + userName + "'s inventory!");
                         } else {
                             //no success. for all the un-merged items, find an item in the player's inventory, and just exceed the material's max stack size!
                             int remainder = map.get(0).getAmount();
@@ -93,10 +94,10 @@ class InvGiveExecutor implements CommandExecutor {
                             finalItems.setAmount(remainder);
 
                             if (plugin.queueRemainingItems()) {
-                                sender.sendMessage(ChatColor.YELLOW + "Could not add the following items to the player's inventory: " + finalItems + ", enqueuing..");
+                                CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.YELLOW + "Could not add the following items to the player's inventory: " + finalItems + ", enqueuing..");
                                 queueManager.enqueueInventory(uuid, plugin.savePartialInventories() ? finalItems : originalItems);
                             } else {
-                                sender.sendMessage(ChatColor.RED + "Could not add the following items to the player's inventory: " + finalItems);
+                                CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "Could not add the following items to the player's inventory: " + finalItems);
                             }
 
                             if (plugin.getServer().getPlayer(uuid) == null && plugin.savePartialInventories())
@@ -108,20 +109,20 @@ class InvGiveExecutor implements CommandExecutor {
                         NotCreatedReason reason = response.getReason();
                         if (reason instanceof TargetDoesNotExist) {
                             TargetDoesNotExist targetDoesNotExist = (TargetDoesNotExist) reason;
-                            sender.sendMessage(ChatColor.RED + "Player " + targetDoesNotExist.getTarget() + " does not exist.");
+                            CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "Player " + targetDoesNotExist.getTarget() + " does not exist.");
                         } else if (reason instanceof UnknownTarget) {
                             UnknownTarget unknownTarget = (UnknownTarget) reason;
-                            sender.sendMessage(ChatColor.RED + "Player " + unknownTarget.getTarget() + " has not logged onto the server yet.");
+                            CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "Player " + unknownTarget.getTarget() + " has not logged onto the server yet.");
                         } else if (reason instanceof TargetHasExemptPermission) {
                             TargetHasExemptPermission targetHasExemptPermission = (TargetHasExemptPermission) reason;
-                            sender.sendMessage(ChatColor.RED + "Player " + targetHasExemptPermission.getTarget() + " is exempted from being spectated.");
+                            CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "Player " + targetHasExemptPermission.getTarget() + " is exempted from being spectated.");
                         } else if (reason instanceof ImplementationFault) {
                             ImplementationFault implementationFault = (ImplementationFault) reason;
-                            sender.sendMessage(ChatColor.RED + "An internal fault occurred when trying to load " + implementationFault.getTarget() + "'s inventory.");
+                            CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "An internal fault occurred when trying to load " + implementationFault.getTarget() + "'s inventory.");
                         } else if (reason instanceof OfflineSupportDisabled) {
-                            sender.sendMessage(ChatColor.RED + "Spectating offline players' inventories is disabled.");
+                            CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "Spectating offline players' inventories is disabled.");
                         } else {
-                            sender.sendMessage(ChatColor.RED + "Cannot give to " + inputPlayer + "'s inventory for an unknown reason.");
+                            CommandSenderHelper.send(invseeApi.getScheduler(), sender, ChatColor.RED + "Cannot give to " + inputPlayer + "'s inventory for an unknown reason.");
                         }
                     }
                 }, runnable -> invseeApi.getScheduler().executeSyncPlayer(uuid, runnable, null));

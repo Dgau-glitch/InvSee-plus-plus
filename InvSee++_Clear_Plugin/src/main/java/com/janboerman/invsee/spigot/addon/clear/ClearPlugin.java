@@ -22,7 +22,7 @@ public class ClearPlugin extends JavaPlugin {
         ispp = (InvseePlusPlus) server.getPluginManager().getPlugin("InvSeePlusPlus");
         api = ispp.getApi();
 
-        ClearTabCompleter tabCompleter = new ClearTabCompleter();
+        ClearTabCompleter tabCompleter = new ClearTabCompleter(api);
 
         PluginCommand invClear = server.getPluginCommand("invclear");
         invClear.setExecutor(new InvClearExecutor(this, api));

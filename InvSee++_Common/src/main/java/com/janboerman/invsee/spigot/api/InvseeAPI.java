@@ -431,7 +431,7 @@ public class InvseeAPI {
             // See: https://www.spigotmc.org/threads/invsee.456148/page-5#post-4371623
             isExemptedFuture = CompletableFuture.completedFuture(false);
         } else {
-            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingMainInventorySpectated(target), scheduler::executeAsync);
+            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingMainInventorySpectated(target), scheduler::executeSyncGlobal);
         }
 
         final CompletableFuture<Optional<UUID>> uuidFuture = fetchUniqueId(targetName);
@@ -524,7 +524,7 @@ public class InvseeAPI {
             isExemptedFuture = CompletableFuture.completedFuture(false);
         } else {
             //make LuckPerms happy by doing the permission lookup async. I am not sure how well other permission plugins handle this, but everybody uses LuckPerms nowadays so...
-            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingMainInventorySpectated(target), scheduler::executeAsync);
+            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingMainInventorySpectated(target), scheduler::executeSyncGlobal);
         }
 
         final CompletableFuture<Optional<NotCreatedReason>> reasonFuture = isExemptedFuture.thenApply(isExempted -> {
@@ -674,7 +674,7 @@ public class InvseeAPI {
             // See: https://www.spigotmc.org/threads/invsee.456148/page-5#post-4371623
             isExemptedFuture = CompletableFuture.completedFuture(false);
         } else {
-            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingEnderchestSpectated(target), scheduler::executeAsync);
+            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingEnderchestSpectated(target), scheduler::executeSyncGlobal);
         }
 
         final CompletableFuture<Optional<UUID>> uuidFuture = fetchUniqueId(targetName);
@@ -763,7 +763,7 @@ public class InvseeAPI {
             isExemptedFuture = CompletableFuture.completedFuture(false);
         } else {
             //make LuckPerms happy by doing the permission lookup async. I am not sure how well other permission plugins handle this, but everybody uses LuckPerms nowadays so...
-            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingEnderchestSpectated(target), scheduler::executeAsync);
+            isExemptedFuture = CompletableFuture.supplyAsync(() -> exempt.isExemptedFromHavingEnderchestSpectated(target), scheduler::executeSyncGlobal);
         }
 
         final CompletableFuture<Optional<NotCreatedReason>> reasonFuture = isExemptedFuture.thenApply(isExempted -> {

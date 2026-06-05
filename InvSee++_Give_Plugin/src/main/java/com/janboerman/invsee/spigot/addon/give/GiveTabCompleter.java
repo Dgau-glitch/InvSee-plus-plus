@@ -4,10 +4,10 @@ import static com.janboerman.invsee.utils.Compat.emptyList;
 import static com.janboerman.invsee.utils.Compat.singletonList;
 
 import com.janboerman.invsee.spigot.addon.give.common.GiveApi;
+import com.janboerman.invsee.spigot.api.InvseeAPI;
 import com.janboerman.invsee.utils.StringHelper;
 import org.bukkit.Material;
 import org.bukkit.command.*;
-import org.bukkit.entity.Player;
 
 import java.util.List;
 import java.util.StringJoiner;
@@ -19,25 +19,22 @@ import java.util.stream.*;
 class GiveTabCompleter implements TabCompleter {
 
     private final GiveApi giveApi;
+    private final InvseeAPI invseeApi;
     private final Supplier<Stream<Material>> materials;
 
-    GiveTabCompleter(GiveApi giveApi, Supplier<Stream<Material>> materials) {
+    GiveTabCompleter(GiveApi giveApi, InvseeAPI invseeApi, Supplier<Stream<Material>> materials) {
         this.giveApi = giveApi;
+        this.invseeApi = invseeApi;
         this.materials = materials;
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 0 || args[0].isEmpty()) return null; //tabcomplete players
+        if (command.getPermission() != null && !sender.hasPermission(command.getPermission())) return emptyList();
 
-        else if (args.length == 1) {
-            final String inputName = args[0];
-            Stream<? extends Player> targets = sender.getServer().getOnlinePlayers().stream();
-            if (sender instanceof Player) {
-                Player player = (Player) sender;
-                targets = targets.filter(player::canSee);
-            }
-            return targets.map(Player::getName)
+        if (args.length == 0 || args.length == 1) {
+            final String inputName = args.length == 0 ? "" : args[0];
+            return invseeApi.namesAndUuidsLookup().getCachedUserNamesSnapshot().stream()
                     .filter(name -> StringHelper.startsWithIgnoreCase(name, inputName))
                     .collect(Collectors.toList());
         }

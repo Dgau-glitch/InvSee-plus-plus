@@ -203,7 +203,7 @@
 - Async tab-complete читает только thread-safe snapshots (`onlineNames`, `offlineNames`, cached usernames, permission UUID cache) и не вызывает Bukkit online-player API из async event.
 - Offline completions заполняются из async-safe cache/OfflinePlayerProvider; online names и permission subscriptions обновляются запланированным server snapshot и player join/quit events.
 
-### 11. Мигрировать listeners и permission checks
+### 11. Мигрировать listeners и permission checks (выполнено для core listeners)
 
 **Сделать:**
 - Проверить `InventoryClickEvent`, `PlayerJoinEvent`, permission subscriptions и edit listener на Folia thread ownership.
@@ -215,7 +215,15 @@
 - Join/tab cache обновляется без thread violations.
 - LuckPerms/Vault/legacy permission plugins не вызываются из опасного потока.
 
-### 12. Привести встроенные аддоны к Folia-safe API
+
+
+**Статус:**
+- `SpectatorInventoryEditListener` оставлен в event/viewer context: edit permission check выполняется синхронно без задержки и только отменяет `InventoryClickEvent`.
+- Player join path продолжает работать в player entity event context, а tab permission snapshots обновляются через `CommandCompletionService` из scheduled global snapshot и join/quit events.
+- Для command feedback добавлен `CommandSenderHelper`, чтобы ответы игрокам выполнялись через entity scheduler отправителя.
+- Offline exempt/Vault permission checks перенесены с async executor на scheduler global path, чтобы legacy providers не вызывались из произвольного async thread.
+
+### 12. Привести встроенные аддоны к Folia-safe API (выполнено для command feedback/completions)
 
 **Сделать:**
 - Проверить `InvSee++_Give_Plugin`, `InvSee++_Clear_Plugin`, `InvSee++_Clone_Plugin` и общие give/clear/clone modules.
@@ -227,7 +235,14 @@
 - `InvSee++_Clone_Plugin` больше не имеет `folia-supported: false`, если миграция завершена.
 - Аддоны не дублируют scheduler logic ядра.
 
-### 13. Проверить integrations: PerWorldInventory, Multiverse-Inventories и permission plugins
+
+
+**Статус:**
+- Give/Clear/Clone command feedback переведен на `CommandSenderHelper`; сообщения игрокам больше не отправляются из target/global continuation напрямую.
+- Give/Clear tab-completion теперь permission-first и использует async-safe username cache вместо прямого `getOnlinePlayers`.
+- Clone addon получил tab-completion, общий sender-safe feedback и `folia-supported: true`; Give 1.21.11 setup также регистрирует `FOLIA_1_21_11` через paper implementation.
+
+### 13. Проверить integrations: PerWorldInventory, Multiverse-Inventories и permission plugins (безопасные ограничения добавлены)
 
 **Сделать:**
 - Для каждого integration определить потокобезопасность API.
@@ -239,6 +254,12 @@
 - Пользователь видит понятное сообщение, если integration недоступна.
 - Безопасные integrations покрыты smoke-test сценариями.
 
+
+
+**Статус:**
+- PerWorldInventory автоматически отключается на Folia с warning до подтверждения thread-safety его API; core InvSee++ продолжает работать без integration.
+- Multiverse-Inventories остается неактивным/неподключенным на Folia до проверки API guarantees.
+- PWI/MVI argument completions не выполняются из async tab event; async completions ограничены player-name snapshots. Permission plugin lookup остается за existing strategy wrappers: LuckPerms async lookup допустим, legacy providers считаются unsafe до отдельной проверки.
 ### 14. Обновить platform modules под Folia 1.21.11 как основной target
 
 **Сделать:**

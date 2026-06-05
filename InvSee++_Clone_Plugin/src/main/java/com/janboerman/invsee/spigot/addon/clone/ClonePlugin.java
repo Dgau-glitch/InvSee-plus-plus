@@ -20,11 +20,15 @@ public final class ClonePlugin extends JavaPlugin {
         InvseePlusPlus ispp = (InvseePlusPlus) server.getPluginManager().getPlugin("InvSeePlusPlus");
         this.api = ispp.getApi();
 
+        CloneTabCompleter tabCompleter = new CloneTabCompleter(api);
+
         PluginCommand invClone = server.getPluginCommand("invclone");
         invClone.setExecutor(new InvCloneExecutor(this));
+        invClone.setTabCompleter(tabCompleter);
 
         PluginCommand enderClone = server.getPluginCommand("enderclone");
         enderClone.setExecutor(new EnderCloneExecutor(this));
+        enderClone.setTabCompleter(tabCompleter);
     }
 
     InvseeAPI getApi() {

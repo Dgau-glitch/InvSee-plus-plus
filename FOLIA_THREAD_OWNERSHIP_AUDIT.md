@@ -6,10 +6,10 @@ Scope: core plugin/API paths plus bundled PerWorldInventory integration and curr
 
 | Area | Representative files / calls | Current owner decision | Required follow-up |
 | --- | --- | --- | --- |
-| Command entry and tab permissions | `InvseeCommandExecutor`, `EnderseeCommandExecutor`, `ReloadCommandExecutor`, `InvseeTabCompleter`; `hasPermission`, command sender checks | Command sender entity for `Player`; console/global for non-player sender | Keep permission checks before completions; audit async tab event separately before enabling more async Bukkit reads. |
+| Command entry and tab permissions | `InvseeCommandExecutor`, `EnderseeCommandExecutor`, `ReloadCommandExecutor`, `command.CommandCompletionService`; `hasPermission`, command sender checks | Command sender entity for `Player`; async tab reads permission UUID snapshot only | Permission checks happen before completion generation; async tab no longer calls Bukkit online-player APIs. |
 | Command feedback | Command `sendMessage` calls | Player entity scheduler for players; direct for console | Implemented for main command responses; keep addon command feedback in task 12. |
-| Online player name completion | `InvseeTabCompleter#getOnlinePlayers`, `Player#canSee` | Viewer entity/global snapshot; not async-only | Move online player snapshots behind scheduler/cache in task 10. |
-| Player lookup by UUID/name | `Server#getPlayer`, `getPlayerExact` in `InvseeAPI`, `FoliaScheduler`, PWI integration | Entity lookup gate only; all player state mutation must move to entity scheduler | Remaining lookup+immediate inventory creation in `mainSpectatorInventory`/`enderSpectatorInventory` is follow-up for tasks 7-9. |
+| Online player name completion | `CommandCompletionService#onlineNames`, player join/quit snapshots | Global plugin snapshot updated from scheduled server work/events; async readers use the snapshot only | Implemented for core `/invsee` and `/endersee` completions. |
+| Player lookup by UUID/name | `Server#getPlayer`, `getPlayerExact` in `InvseeAPI`, `FoliaScheduler`, PWI integration | Entity lookup gate only; all player state mutation must move to entity scheduler | Pending offline creations are now deduplicated by global concurrent request registry; remaining direct online lookup state mutation is tracked under live/offline flow cleanup. |
 | Opening spectator inventories | `platform.openMainSpectatorInventory`, `platform.openEnderSpectatorInventory`, `HumanEntity#openInventory` | Viewer entity scheduler | Async open futures and PWI command opens now schedule final open on viewer entity. Direct deprecated sync APIs remain compatibility-only and should be migrated/removed later. |
 | Closing/reopening spectator viewers | `HumanEntity#closeInventory`, `HumanEntity#openInventory` in join/PWI profile transitions | Viewer entity scheduler | Core join transfer and PWI profile transitions now schedule close/open per viewer entity; remaining container transaction safety is task 7. |
 | Inventory mutation / live inventory writes | `setContents`, NMS `clicked`, wrapper inventories, PWI live transfer | Target entity scheduler for online targets; async file/NBT flow for offline targets | 1.21.11 main/ender NMS containers now mutate a snapshot on the viewer thread and commit only on the target entity owner; remaining non-1.21.11 and save-flow work stays in tasks 8-9. |
@@ -34,8 +34,8 @@ Scope: core plugin/API paths plus bundled PerWorldInventory integration and curr
 
 1. Task 7: replace direct NMS/live inventory mutation with snapshot/diff/commit on target entity scheduler. **Implemented for 1.21.11 main/ender NMS containers; extend the same service to older NMS modules before setting global Folia support.**
 2. Task 8: separate online target entity flow from offline async file/NBT flow, including retired callbacks. **Partially implemented for retired 1.21.11 container commits; offline save/load still needs full async service extraction.**
-3. Task 9: make caches and pending futures explicitly thread-safe under Folia concurrency.
-4. Task 10: move tab-completion online-player reads to safe snapshots and preserve permission-first filtering.
+3. Task 9: make caches and pending futures explicitly thread-safe under Folia concurrency. **Implemented for open spectator cache, UUID/name snapshots and pending request registries.**
+4. Task 10: move tab-completion online-player reads to safe snapshots and preserve permission-first filtering. **Implemented for core command/tab-completion module.**
 5. Task 11: document and adapt every permission provider by actual thread guarantee.
 6. Task 13: verify PerWorldInventory and Multiverse-Inventories APIs; disable or adapt unsafe integrations on Folia.
 

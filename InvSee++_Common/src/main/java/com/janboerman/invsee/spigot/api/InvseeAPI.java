@@ -13,6 +13,7 @@ import com.janboerman.invsee.spigot.api.template.*;
 import com.janboerman.invsee.spigot.internal.InvseePlatform;
 import com.janboerman.invsee.spigot.internal.NamesAndUUIDs;
 import com.janboerman.invsee.spigot.internal.OpenSpectatorsCache;
+import com.janboerman.invsee.spigot.internal.PendingSpectatorRequests;
 import com.janboerman.invsee.spigot.internal.inventory.ShallowCopy;
 import com.janboerman.invsee.spigot.internal.inventory.Personal;
 import com.janboerman.invsee.utils.*;
@@ -59,11 +60,8 @@ public class InvseeAPI {
     private LogOptions logOptions = new LogOptions();
     private PlaceholderPalette placeholderPalette = PlaceholderPalette.empty();
 
-    private final Map<String, CompletableFuture<SpectateResponse<MainSpectatorInventory>>> pendingInventoriesByName = Collections.synchronizedMap(new CaseInsensitiveMap<>());
-    private final Map<UUID, CompletableFuture<SpectateResponse<MainSpectatorInventory>>> pendingInventoriesByUuid = new ConcurrentHashMap<>();
-
-    private final Map<String, CompletableFuture<SpectateResponse<EnderSpectatorInventory>>> pendingEnderChestsByName = Collections.synchronizedMap(new CaseInsensitiveMap<>());
-    private final Map<UUID, CompletableFuture<SpectateResponse<EnderSpectatorInventory>>> pendingEnderChestsByUuid = new ConcurrentHashMap<>();
+    private final PendingSpectatorRequests<MainSpectatorInventory> pendingInventories = new PendingSpectatorRequests<>();
+    private final PendingSpectatorRequests<EnderSpectatorInventory> pendingEnderChests = new PendingSpectatorRequests<>();
 
     //TODO I don't like the design of this. This looks like a hack purely introduced for PerWorldInventory integration
     //TODO maybe we can create a proper abstraction and use that for Multiverse-Inventories / MyWorlds?
@@ -108,11 +106,8 @@ public class InvseeAPI {
 
     /** Called when InvSee++ disables. DO NOT CALL! */
     public void shutDown() {
-        //complete futures. needed to ensure changes are saved.
-        for (CompletableFuture<SpectateResponse<MainSpectatorInventory>> future : pendingInventoriesByUuid.values())
-            try { future.join(); } catch (Throwable e) { e.printStackTrace(); }
-        for (CompletableFuture<SpectateResponse<EnderSpectatorInventory>> future : pendingEnderChestsByUuid.values())
-            try { future.join(); } catch (Throwable e) { e.printStackTrace(); }
+        pendingInventories.shutdown(plugin.getLogger());
+        pendingEnderChests.shutdown(plugin.getLogger());
 
         //clean up logger resources
         LogOutput.closeGlobal();
@@ -455,8 +450,7 @@ public class InvseeAPI {
             }
         });
 
-        //map to SpectateResponse
-        final CompletableFuture<SpectateResponse<MainSpectatorInventory>> future = combinedFuture.thenCompose(eitherReasonOrUuid -> {
+        return pendingInventories.byName(targetName, () -> combinedFuture.thenCompose(eitherReasonOrUuid -> {
             if (eitherReasonOrUuid.isRight()) {
                 UUID uuid = eitherReasonOrUuid.getRight();
                 return mainSpectatorInventory(uuid, targetName, options);
@@ -464,10 +458,7 @@ public class InvseeAPI {
                 NotCreatedReason reason = eitherReasonOrUuid.getLeft();
                 return CompletableFuture.completedFuture(SpectateResponse.fail(reason));
             }
-        });
-        pendingInventoriesByName.put(targetName, future);
-        future.whenComplete((result, error) -> pendingInventoriesByName.remove(targetName));
-        return future;
+        }));
     }
 
     // UUID
@@ -545,7 +536,7 @@ public class InvseeAPI {
         });
 
         //I really need monad transformers to make this cleaner.
-        final CompletableFuture<SpectateResponse<MainSpectatorInventory>> combinedFuture = reasonFuture.thenCompose(maybeReason -> {
+        return pendingInventories.byUuid(playerId, () -> reasonFuture.thenCompose(maybeReason -> {
             if (maybeReason.isPresent()) {
                 return CompletableFuture.completedFuture(SpectateResponse.fail(maybeReason.get()));
             } else {
@@ -558,19 +549,13 @@ public class InvseeAPI {
                 //not in cache: create offline inventory
                 return platform.createOfflineInventory(playerId, playerName, options);
             }
-        });
-
-        //map to SpectateResponse and cache if success
-        CompletableFuture<SpectateResponse<MainSpectatorInventory>> future = combinedFuture.<SpectateResponse<MainSpectatorInventory>>thenApply(eitherReasonOrInventory -> {
+        }).<SpectateResponse<MainSpectatorInventory>>thenApply(eitherReasonOrInventory -> {
             eitherReasonOrInventory.ifSuccess(openSpectatorsCache::cache);
             return eitherReasonOrInventory;
         }).handleAsync((success, error) -> {
             if (error == null) return success;
             return Rethrow.unchecked(error);
-        }, runnable -> scheduler.executeSyncPlayer(playerId, runnable, null));
-        pendingInventoriesByUuid.put(playerId, future);
-        future.whenComplete((result, error) -> pendingInventoriesByUuid.remove(playerId));
-        return future;
+        }, runnable -> scheduler.executeSyncPlayer(playerId, runnable, null)));
     }
 
     // ================================== API methods: Enderchest ==================================
@@ -708,8 +693,7 @@ public class InvseeAPI {
             }
         });
 
-        //map to SpectateResponse and cache if success
-        CompletableFuture<SpectateResponse<EnderSpectatorInventory>> future = combinedFuture.thenCompose(eitherReasonOrUuid -> {
+        return pendingEnderChests.byName(targetName, () -> combinedFuture.thenCompose(eitherReasonOrUuid -> {
             if (eitherReasonOrUuid.isRight()) {
                 UUID uuid = eitherReasonOrUuid.getRight();
                 return enderSpectatorInventory(uuid, targetName, options);
@@ -717,10 +701,7 @@ public class InvseeAPI {
                 NotCreatedReason reason = eitherReasonOrUuid.getLeft();
                 return CompletableFuture.completedFuture(SpectateResponse.fail(reason));
             }
-        });
-        pendingEnderChestsByName.put(targetName, future);
-        future.whenComplete((result, error) -> pendingEnderChestsByName.remove(targetName));
-        return future;
+        }));
     }
 
     // UUID
@@ -794,7 +775,7 @@ public class InvseeAPI {
         });
 
         //I really need monad transformers to make this cleaner.
-        final CompletableFuture<SpectateResponse<EnderSpectatorInventory>> combinedFuture = reasonFuture.thenCompose(maybeReason -> {
+        return pendingEnderChests.byUuid(playerId, () -> reasonFuture.thenCompose(maybeReason -> {
             if (maybeReason.isPresent()) {
                 return CompletableFuture.completedFuture(SpectateResponse.fail(maybeReason.get()));
             } else {
@@ -807,19 +788,13 @@ public class InvseeAPI {
                 //not in cache: create offline inventory
                 return platform.createOfflineEnderChest(playerId, playerName, options);
             }
-        });
-
-        //map to SpectateResult and cache if success
-        CompletableFuture<SpectateResponse<EnderSpectatorInventory>> future = combinedFuture.<SpectateResponse<EnderSpectatorInventory>>thenApply(eitherReasonOrInventory -> {
+        }).<SpectateResponse<EnderSpectatorInventory>>thenApply(eitherReasonOrInventory -> {
             eitherReasonOrInventory.ifSuccess(openSpectatorsCache::cache);
             return eitherReasonOrInventory;
         }).handleAsync((success, error) -> {
             if (error == null) return success;
             return Rethrow.unchecked(error);
-        }, runnable -> scheduler.executeSyncPlayer(playerId, runnable, null));
-        pendingEnderChestsByUuid.put(playerId, future);
-        future.whenComplete((result, error) -> pendingEnderChestsByUuid.remove(playerId));
-        return future;
+        }, runnable -> scheduler.executeSyncPlayer(playerId, runnable, null)));
     }
 
     // ================================== Open Main/Ender Inventory ==================================
@@ -884,13 +859,13 @@ public class InvseeAPI {
             EnderSpectatorInventory newEnderSpectator = null;
 
             //check if somebody was looking up the player and make sure they get the player's live inventory
-            CompletableFuture<SpectateResponse<MainSpectatorInventory>> mainInvNameFuture = pendingInventoriesByName.remove(userName);
+            CompletableFuture<SpectateResponse<MainSpectatorInventory>> mainInvNameFuture = pendingInventories.removeName(userName);
             if (mainInvNameFuture != null) mainInvNameFuture.complete(SpectateResponse.succeed(newInventorySpectator = platform.spectateInventory(player, mainInventoryCreationOptions())));
-            CompletableFuture<SpectateResponse<MainSpectatorInventory>> mainInvUuidFuture = pendingInventoriesByUuid.remove(uuid);
+            CompletableFuture<SpectateResponse<MainSpectatorInventory>> mainInvUuidFuture = pendingInventories.removeUuid(uuid);
             if (mainInvUuidFuture != null) mainInvUuidFuture.complete(SpectateResponse.succeed(newInventorySpectator != null ? newInventorySpectator : (newInventorySpectator = platform.spectateInventory(player, mainInventoryCreationOptions()))));
-            CompletableFuture<SpectateResponse<EnderSpectatorInventory>> enderNameFuture = pendingEnderChestsByName.remove(userName);
+            CompletableFuture<SpectateResponse<EnderSpectatorInventory>> enderNameFuture = pendingEnderChests.removeName(userName);
             if (enderNameFuture != null) enderNameFuture.complete(SpectateResponse.succeed(newEnderSpectator = platform.spectateEnderChest(player, enderInventoryCreationOptions())));
-            CompletableFuture<SpectateResponse<EnderSpectatorInventory>> enderUuidFuture = pendingEnderChestsByUuid.remove(uuid);
+            CompletableFuture<SpectateResponse<EnderSpectatorInventory>> enderUuidFuture = pendingEnderChests.removeUuid(uuid);
             if (enderUuidFuture != null) enderUuidFuture.complete(SpectateResponse.succeed(newEnderSpectator != null ? newEnderSpectator : (newEnderSpectator = platform.spectateEnderChest(player, enderInventoryCreationOptions()))));
 
 

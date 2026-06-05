@@ -21,6 +21,7 @@ import com.janboerman.invsee.spigot.api.template.Mirror;
 import com.janboerman.invsee.spigot.api.template.PlayerInventorySlot;
 import com.janboerman.invsee.spigot.internal.ConstantTitle;
 import com.janboerman.invsee.spigot.internal.InvseePlatform;
+import com.janboerman.invsee.spigot.command.CommandCompletionService;
 import com.janboerman.invsee.spigot.internal.NamesAndUUIDs;
 import com.janboerman.invsee.spigot.internal.OpenSpectatorsCache;
 import com.janboerman.invsee.spigot.api.Scheduler;
@@ -137,10 +138,10 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         lookup.materialiseUsernameAndUniqueIdResolveStrategies();
 
         //commands
-        setupCommands();
+        CommandCompletionService completions = setupCommands(scheduler, playerDatabase);
 
         //event listeners
-        setupEvents(scheduler, playerDatabase);
+        setupEvents(completions);
 
         //metrics
         metrics = Metrics.enable(this);
@@ -159,8 +160,9 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         }
     }
 
-    private void setupCommands() {
-        InvseeTabCompleter tabCompleter = new InvseeTabCompleter(this);
+    private CommandCompletionService setupCommands(Scheduler scheduler, OfflinePlayerProvider playerDatabase) {
+        CommandCompletionService completions = new CommandCompletionService(this, scheduler, playerDatabase);
+        InvseeTabCompleter tabCompleter = new InvseeTabCompleter(completions);
 
         PluginCommand invseeCommand = getCommand("invsee");
         PluginCommand enderseeCommand = getCommand("endersee");
@@ -172,21 +174,21 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
 
         invseeCommand.setTabCompleter(tabCompleter);
         enderseeCommand.setTabCompleter(tabCompleter);
+        reloadCommand.setTabCompleter(tabCompleter);
+        return completions;
     }
 
-    private void setupEvents(Scheduler scheduler, OfflinePlayerProvider playerDatabase) {
+    private void setupEvents(CommandCompletionService completions) {
         // Pass FileConfiguration config parameter?
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(new SpectatorInventoryEditListener(), this);
 
-        if (offlinePlayerSupport() && tabCompleteOfflinePlayers()) {
-            if (asyncTabcompleteEvent) {
-                pluginManager.registerEvents(new AsyncTabCompleter(this, scheduler, playerDatabase), this);
-            }
+        if (offlinePlayerSupport() && tabCompleteOfflinePlayers() && asyncTabcompleteEvent) {
+            pluginManager.registerEvents(new AsyncTabCompleter(completions), this);
         }
     }
-	
+
 	@Override
 	public void onDisable() {
         if (api != null) { //the api can be null if we are running on unsupported server software.

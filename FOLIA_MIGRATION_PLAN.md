@@ -164,7 +164,7 @@
 - Offline inventory creation/save не блокирует region tick thread.
 - Существующие настройки offline/unknown player support сохраняются.
 
-### 9. Мигрировать cache и pending futures на Folia-safe модель
+### 9. Мигрировать cache и pending futures на Folia-safe модель (выполнено)
 
 **Сделать:**
 - Проверить `OpenSpectatorsCache`, pending maps и UUID/name cache на thread-safety и ownership.
@@ -176,7 +176,14 @@
 - Pending futures удаляются корректно при success/failure/disable.
 - `api.shutDown()` завершает/отменяет задачи без зависаний.
 
-### 10. Перенести команды и tab-completion на Folia-safe command module
+
+
+**Статус:**
+- `OpenSpectatorsCache` переведен на `ConcurrentHashMap` с atomic `compute`, stale weak references удаляются compare-remove.
+- Pending main/ender requests вынесены в `PendingSpectatorRequests`: это global plugin state, concurrent viewers одного offline target делят один future через `computeIfAbsent`, stale completion не удаляет новый request.
+- `api.shutDown()` больше не блокируется на `join()` pending futures: pending requests отменяются/очищаются, logger resources закрываются отдельно.
+
+### 10. Перенести команды и tab-completion на Folia-safe command module (выполнено для core commands)
 
 **Сделать:**
 - Разделить commands/tab-completion в отдельный модуль/пакет с shared permission checks и контекстными completions.
@@ -188,6 +195,13 @@
 - `/invsee`, `/endersee`, `/invseeplusplusreload` имеют быстрые и контекстные completions.
 - Игрок без permission не получает подсказки ни через sync tab, ни через async tab event.
 - Нет Bukkit API access из async tab thread, кроме официально разрешенного event context.
+
+
+
+**Статус:**
+- Core completions вынесены в `command.CommandCompletionService`: permission проверяется до построения подсказок, `/invsee`, `/endersee` и `/invseeplusplusreload` используют общий TabCompleter.
+- Async tab-complete читает только thread-safe snapshots (`onlineNames`, `offlineNames`, cached usernames, permission UUID cache) и не вызывает Bukkit online-player API из async event.
+- Offline completions заполняются из async-safe cache/OfflinePlayerProvider; online names и permission subscriptions обновляются запланированным server snapshot и player join/quit events.
 
 ### 11. Мигрировать listeners и permission checks
 

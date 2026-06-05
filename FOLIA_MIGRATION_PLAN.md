@@ -7,12 +7,12 @@
 
 ## Текущее состояние и риски
 
-- В основном plugin.yml сейчас указано `folia-supported: false`, поэтому главный плагин не объявлен совместимым с Folia.
-- Модуль `InvSee++_Plugin` уже содержит `FoliaScheduler`, но зависимость Folia API устарела (`1.19.4-R0.1-SNAPSHOT`), а абстракция `Scheduler` покрывает только global/entity/async сценарии и не моделирует регионные, cancellable и player-pair операции.
-- Платформа определяется как `CRAFTBUKKIT`, `PAPER` или `GLOWSTONE`; отдельного `FOLIA` типа нет, поэтому Folia сейчас фактически маскируется под Paper/CraftBukkit по версии сервера.
-- В NMS-контейнерах 1.21.11 уже отмечены TODO о data race между tick-потоком зрителя и tick-потоком цели при кликах по инвентарю.
-- В командах, tab-completion, listeners, integrations и save/load логике есть Bukkit-вызовы, которые нужно классифицировать по владельцу данных: global, async, entity scheduler или region scheduler.
-- Аддоны имеют разный статус: `InvSee++_Clear_Plugin` уже помечен Folia-compatible, а `InvSee++_Clone_Plugin` — нет; их команды используют API scheduler и должны мигрировать вместе с ядром.
+- Основной `plugin.yml` и мигрированные встроенные аддоны объявляют `folia-supported: true`; флаг остается валиден только вместе с scheduler/thread-safety миграцией и QA checklist.
+- Модуль `InvSee++_Plugin` использует `dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT` со scope `provided`, а общая `Scheduler`-абстракция моделирует global, async, entity и region операции с cancellable handles.
+- Платформа определяется как `FOLIA` через общий detector, а Folia 1.21.11 предсказуемо выбирает Paper 1.21.11 implementation provider за Folia-safe scheduler/service layer.
+- NMS-контейнеры 1.21.11 переведены с прямой мутации live inventory на snapshot/diff/commit через общий transaction service и target entity scheduler.
+- Команды, tab-completion, listeners, integrations и save/load логика классифицированы по владельцу данных в `FOLIA_THREAD_OWNERSHIP_AUDIT.md`; оставшиеся ограничения integrations оформлены как отдельные QA/compatibility сценарии.
+- Встроенные аддоны Give/Clear/Clone используют общий API/scheduler слой и имеют согласованные Folia flags.
 
 ## Правило декомпозиции
 
@@ -260,7 +260,7 @@
 - PerWorldInventory автоматически отключается на Folia с warning до подтверждения thread-safety его API; core InvSee++ продолжает работать без integration.
 - Multiverse-Inventories остается неактивным/неподключенным на Folia до проверки API guarantees.
 - PWI/MVI argument completions не выполняются из async tab event; async completions ограничены player-name snapshots. Permission plugin lookup остается за existing strategy wrappers: LuckPerms async lookup допустим, legacy providers считаются unsafe до отдельной проверки.
-### 14. Обновить platform modules под Folia 1.21.11 как основной target
+### 14. Обновить platform modules под Folia 1.21.11 как основной target (выполнено)
 
 **Сделать:**
 - Решить, остается ли поддержка legacy CraftBukkit/Paper в этом репозитории или Folia становится отдельным артефактом/профилем.
@@ -272,7 +272,12 @@
 - 1.21.11 Folia implementation выбирается предсказуемо.
 - Нет accidental classloading несовместимых NMS классов.
 
-### 15. Обновить `plugin.yml`, документацию и compatibility matrix
+**Статус:**
+- Стратегия артефакта: сохраняется single jar с legacy CraftBukkit/Paper runtime selection; отдельный Folia-only artifact пока не вводится, чтобы не ломать существующих пользователей и addons.
+- Folia code path изолирован: `ServerSoftware.detect(...)` определяет платформу `FOLIA`, `InvseePlusPlus` выбирает `FoliaScheduler`, а `Setup` регистрирует `FOLIA_1_21_11` на базе совместимого Paper 1.21.11 implementation provider.
+- Legacy modules не сокращаются и не получают прямую зависимость на Folia API; несовместимые NMS классы продолжают загружаться только через существующий version/platform selector.
+
+### 15. Обновить `plugin.yml`, документацию и compatibility matrix (выполнено)
 
 **Сделать:**
 - После завершения технических задач поменять `folia-supported: true` для основного плагина и мигрированных аддонов.
@@ -284,7 +289,12 @@
 - Документация явно говорит, что simple flag недостаточен без scheduler/thread-safety миграции.
 - Пользователь понимает, какой jar ставить на Folia 1.21.11.
 
-### 16. Добавить тестовый и ручной Folia QA-план
+**Статус:**
+- Основной plugin.yml и мигрированные addons имеют согласованный `folia-supported: true`; перед release publication полный smoke checklist из `FOLIA_QA_PLAN.md` остается обязательным gate.
+- README описывает single-jar стратегию, минимальный Folia target 1.21.11, compatibility matrix, известные ограничения PerWorldInventory/Multiverse-Inventories/permission providers и Maven/Gradle dependency coordinates.
+- Документация явно фиксирует, что simple `folia-supported` flag недостаточен без scheduler/thread-safety миграции и QA.
+
+### 16. Добавить тестовый и ручной Folia QA-план (выполнено)
 
 **Сделать:**
 - Добавить checklist запуска на Folia 1.21.11: enable, commands, tab completion, online target, offline target, edit, save, reload, disable.
@@ -296,7 +306,11 @@
 - Каждый Folia-specific bug фиксируется отдельным регрессионным сценарием.
 - Перед релизом выполняется полный checklist.
 
-### 17. Финальная стабилизация и cleanup
+**Статус:**
+- Добавлен `FOLIA_QA_PLAN.md` с automated checks, startup/shutdown, commands/tab-completion, online/offline target, addons, integrations, regression registry и release sign-off checklist.
+- Сценарии покрывают разные регионы, teleport, logout/retired entity, concurrent offline requests, reload/disable и pending futures cleanup.
+
+### 17. Финальная стабилизация и cleanup (выполнено для документации и flags; runtime smoke остается release gate)
 
 **Сделать:**
 - Удалить устаревшие TODO/adapter временного периода или превратить их в tracked issues.
@@ -307,6 +321,11 @@
 - Нет известных Folia thread violations.
 - Нет несогласованных `folia-supported` flags.
 - Код расширяемый: новая inventory feature подключается через service/API без переписывания ядра.
+
+**Статус:**
+- Устаревшие planning bullets о missing Folia platform, outdated Folia API, main plugin `folia-supported: false` и 1.21.11 NMS data-race TODO заменены на текущее состояние.
+- DRY boundary задокументирован: scheduler, transaction, pending-request, command sender/completion и addon flows используют общие services/API вместо копирования Folia-specific логики.
+- Runtime smoke-test на настоящем Folia сервере оформлен как обязательный pre-release checklist, потому что его нельзя достоверно заменить локальной компиляцией.
 
 ## Рекомендуемый порядок выполнения
 

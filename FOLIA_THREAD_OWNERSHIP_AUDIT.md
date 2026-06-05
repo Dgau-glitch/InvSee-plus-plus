@@ -32,7 +32,7 @@ Scope: core plugin/API paths plus bundled PerWorldInventory integration and curr
 
 ## Follow-up tasks created from unknown/unsafe ownership
 
-1. Task 7: replace direct NMS/live inventory mutation with snapshot/diff/commit on target entity scheduler. **Implemented for 1.21.11 main/ender NMS containers; extend the same service to older NMS modules before setting global Folia support.**
+1. Task 7: replace direct NMS/live inventory mutation with snapshot/diff/commit on target entity scheduler. **Implemented for 1.21.11 main/ender NMS containers; older NMS modules remain under legacy runtime selectors and must not be loaded for Folia 1.21.11.**
 2. Task 8: separate online target entity flow from offline async file/NBT flow, including retired callbacks. **Partially implemented for retired 1.21.11 container commits; offline save/load still needs full async service extraction.**
 3. Task 9: make caches and pending futures explicitly thread-safe under Folia concurrency. **Implemented for open spectator cache, UUID/name snapshots and pending request registries.**
 4. Task 10: move tab-completion online-player reads to safe snapshots and preserve permission-first filtering. **Implemented for core command/tab-completion module.**
@@ -53,3 +53,10 @@ Scope: core plugin/API paths plus bundled PerWorldInventory integration and curr
 3. Repeat with `/endersee target` and ender chest slots. Expected: same commit/abort behavior.
 4. While the viewer GUI is open, make the target teleport between distant regions. Expected: commits follow the target entity scheduler and do not fall back to global region execution.
 5. While the viewer GUI is open, make the target log out. Expected: the retired callback runs, the live entity is no longer touched, and pending snapshot state is handed to the async offline-flow hook without blocking a region tick.
+
+
+## Artifact and release QA decision
+
+- Artifact strategy: keep one distribution jar with legacy CraftBukkit/Paper selectors plus an isolated Folia 1.21.11 scheduler/platform path; no Folia-only artifact is introduced in this migration step.
+- Folia 1.21.11 chooses the Paper 1.21.11 implementation provider only after `ServerSoftware.detect(...)` reports platform `FOLIA`; the Folia scheduler path owns entity/region/global/async execution.
+- Release gate: `FOLIA_QA_PLAN.md` is the required smoke-test protocol before publishing a Folia-labelled build, even though `plugin.yml` declares `folia-supported: true`.

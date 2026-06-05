@@ -144,12 +144,38 @@ There are two types of support, Tier 1 support and Tier 2 support.
 
 In general I support the latest patch release of popularly used Minecraft version, as well as multiple recent versions of the latest major release.
 
+#### Folia 1.21.11 artifact strategy
+
+InvSee++ continues to publish a single jar that contains the legacy CraftBukkit/Paper runtime selectors and the Folia-safe code path. Folia is not a separate artifact yet: install the normal `InvSee++.jar` on Folia 1.21.11. At runtime the plugin detects Folia explicitly and selects the 1.21.11 Paper implementation behind the Folia scheduler/service layer, while older CraftBukkit/Paper versions keep their existing selectors.
+
+The `folia-supported: true` flag in `plugin.yml` is only a compatibility declaration. It is not sufficient by itself: every Bukkit/NMS touchpoint must still use the scheduler, transaction and command services documented in `FOLIA_MIGRATION_PLAN.md`, and the release checklist in `FOLIA_QA_PLAN.md` must pass before publishing a Folia build.
+
+Known Folia integration limits:
+- PerWorldInventory is disabled automatically on Folia until its API thread-safety guarantees are verified; core InvSee++ remains enabled without the integration.
+- Multiverse-Inventories remains disabled on Folia until its API can be audited.
+- LuckPerms lookups use its asynchronous API where available; Vault and legacy permission providers are treated as sync/entity-owned integrations unless their own documentation proves async safety.
+
+Folia API coordinates for developers:
+
+```xml
+<dependency>
+  <groupId>dev.folia</groupId>
+  <artifactId>folia-api</artifactId>
+  <version>1.21.11-R0.1-SNAPSHOT</version>
+  <scope>provided</scope>
+</dependency>
+```
+
+```kotlin
+compileOnly("dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT")
+```
+
 Server support matrix:
 | Server Software            | 1.8.8  | 1.12.2 | 1.16.5  | 1.17.1 | 1.18.2 | 1.19.4  | 1.20.1 | 1.20.4 | 1.20.6  | 1.21.1 | 1.21.4 | 1.21.5 | 1.21.7 | 1.21.8 | 1.21.9 | 1.21.10| 1.21.11 | 26.1.1 |
 |----------------------------|--------|--------|---------|--------|--------|---------|--------|--------|---------|--------|--------|--------|--------|--------|--------|--------|---------|---------|
 | CraftBukkit                | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 1  |
 | Paper                      | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
-| Folia                      | n/a    | n/a    | n/a     | n/a    | n/a    | planned | -      | -      | planned | -      | -      | -      | -      | -      | -      | -      | -       | planned |
+| Folia                      | n/a    | n/a    | n/a     | n/a    | n/a    | planned | -      | -      | planned | -      | -      | -      | -      | -      | -      | -      | Tier 2  | planned |
 | UniverseSpigot             | n/a    | n/a    | n/a     | n/a    | n/a    | n/a     | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
 | Other forks of CraftBukkit | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
 | (Neo)Forge/Bukkit hybrids  | Tier 2 | Tier 2 | Tier 2* | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |

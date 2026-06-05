@@ -105,7 +105,7 @@ public class InvseeImpl implements InvseePlatform, TestingCompatLayer {
         //so let's emulate that!
         int windowId = HybridServerSupport.nextContainerCounter(nmsPlayer);
         Inventory bottom = nmsPlayer.getInventory();
-        MainNmsContainer nmsWindow = new MainNmsContainer(windowId, nmsInventory, bottom, nmsPlayer, options);
+        MainNmsContainer nmsWindow = new MainNmsContainer(windowId, nmsInventory, bottom, nmsPlayer, options, scheduler);
         nmsWindow.setTitle(CraftChatMessage.fromString(title != null ? title : inv.getTitle())[0]);
         var eventCancelled = callInventoryOpenEvent(nmsPlayer, nmsWindow); //closes current open inventory if one is already open
         if (eventCancelled.isPresent()) {
@@ -151,7 +151,7 @@ public class InvseeImpl implements InvseePlatform, TestingCompatLayer {
 
     @Override
     public MainSpectatorInventory spectateInventory(HumanEntity player, CreationOptions<PlayerInventorySlot> options) {
-        MainNmsInventory spectatorInv = new MainNmsInventory(((CraftHumanEntity) player).getHandle(), options);
+        MainNmsInventory spectatorInv = new MainNmsInventory(((CraftHumanEntity) player).getHandle(), options, scheduler);
         MainBukkitInventory bukkitInventory = spectatorInv.bukkit();
         InventoryView targetView = player.getOpenInventory();
         bukkitInventory.watch(targetView);
@@ -183,7 +183,7 @@ public class InvseeImpl implements InvseePlatform, TestingCompatLayer {
         //so let's emulate that!
         int windowId = HybridServerSupport.nextContainerCounter(nmsPlayer);
         Inventory bottom = nmsPlayer.getInventory();
-        EnderNmsContainer nmsWindow = new EnderNmsContainer(windowId, nmsInventory, bottom, nmsPlayer, options);
+        EnderNmsContainer nmsWindow = new EnderNmsContainer(windowId, nmsInventory, bottom, nmsPlayer, options, scheduler);
         nmsWindow.setTitle(CraftChatMessage.fromString(title != null ? title : inv.getTitle())[0]);
         var eventCancelled = callInventoryOpenEvent(nmsPlayer, nmsWindow); //closes current open inventory if one is already open
         if (eventCancelled.isPresent()) {
@@ -198,7 +198,7 @@ public class InvseeImpl implements InvseePlatform, TestingCompatLayer {
 
     @Override
     public EnderSpectatorInventory spectateEnderChest(HumanEntity player, CreationOptions<EnderChestSlot> options) {
-        EnderNmsInventory spectatorInv = new EnderNmsInventory(((CraftHumanEntity) player).getHandle(), options);
+        EnderNmsInventory spectatorInv = new EnderNmsInventory(((CraftHumanEntity) player).getHandle(), options, scheduler);
         EnderBukkitInventory bukkitInventory = spectatorInv.bukkit();
         cache.cache(bukkitInventory);
         return bukkitInventory;

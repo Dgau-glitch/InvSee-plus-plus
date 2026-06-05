@@ -1,19 +1,14 @@
 package com.janboerman.invsee.spigot.impl_1_21_11_R7;
 
-import java.util.List;
-import java.util.Objects;
-
 import com.janboerman.invsee.spigot.api.CreationOptions;
+import com.janboerman.invsee.spigot.api.Scheduler;
+import com.janboerman.invsee.spigot.internal.inventory.SpectatorInventoryTransactionService;
 import com.janboerman.invsee.spigot.api.logging.DifferenceTracker;
 import com.janboerman.invsee.spigot.api.logging.LogOptions;
 import com.janboerman.invsee.spigot.api.logging.LogOutput;
 import com.janboerman.invsee.spigot.api.target.Target;
 import com.janboerman.invsee.spigot.api.template.EnderChestSlot;
 import com.janboerman.invsee.spigot.api.template.Mirror;
-
-import org.bukkit.craftbukkit.v1_21_R7.inventory.CraftItemStack;
-import org.bukkit.plugin.Plugin;
-
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -21,6 +16,12 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
+import org.bukkit.plugin.Plugin;
+
+import java.util.List;
+import java.util.Objects;
 
 class EnderNmsContainer extends AbstractContainerMenu {
 	
@@ -34,6 +35,7 @@ class EnderNmsContainer extends AbstractContainerMenu {
 	private final int topRows;	//in Purpur, this is not always 3.
 	private EnderBukkitInventoryView bukkitView;
 	final DifferenceTracker tracker;
+	private final SpectatorInventoryTransactionService<List<org.bukkit.inventory.ItemStack>> transactions;
 	
 	private static MenuType<?> determineMenuType(EnderNmsInventory inv) {
 		return switch (inv.getContainerSize()) {
@@ -61,22 +63,22 @@ class EnderNmsContainer extends AbstractContainerMenu {
 	// decorate clicked method for tracking/logging
 	@Override
 	public void clicked(int i, int j, ClickType inventoryclicktype, Player entityhuman) {
-		//TODO Folia: schedule task that is synchronised across both the target player's EntityScheduler as well as the spectator player's EntityScheduler.
-		//TODO because now we have a data race.
-		//TODO can I use java.util.concurrent.{Exchanger, CyclicBarrier or Phaser} perhaps??
-		//TODO when we arrive here, we are in the tick thread of the Spectator player.
-
-		List<org.bukkit.inventory.ItemStack> contentsBefore = null, contentsAfter;
-		if (tracker != null) {
-			contentsBefore = top.getContents().stream().map(CraftItemStack::asBukkitCopy).toList();
+		List<org.bukkit.inventory.ItemStack> contentsBefore;
+		List<org.bukkit.inventory.ItemStack> contentsAfter;
+		synchronized (top) {
+			contentsBefore = top.snapshotBukkit();
+			super.clicked(i, j, inventoryclicktype, entityhuman);
+			contentsAfter = top.snapshotBukkit();
 		}
 
-		super.clicked(i, j, inventoryclicktype, entityhuman);
-
-		if (tracker != null) {
-			contentsAfter = top.getContents().stream().map(CraftItemStack::asBukkitCopy).toList();
-			tracker.onClick(contentsBefore, contentsAfter);
-		}
+		transactions.commit(
+				contentsBefore,
+				contentsAfter,
+				() -> { org.bukkit.entity.Player target = creationOptions.getPlugin().getServer().getPlayer(top.targetPlayerUuid); return target == null ? null : EnderNmsInventory.snapshotTarget(((CraftPlayer) target).getHandle()); },
+				after -> { org.bukkit.entity.Player target = creationOptions.getPlugin().getServer().getPlayer(top.targetPlayerUuid); if (target != null) EnderNmsInventory.applyToTarget(((CraftPlayer) target).getHandle(), after); },
+				live -> { synchronized (top) { top.resyncFromBukkitSnapshot(live); } },
+				() -> { if (tracker != null) tracker.onClick(contentsBefore, contentsAfter); },
+				() -> { synchronized (top) { top.resyncFromBukkitSnapshot(contentsBefore); } });
 	}
 
 	// decorate removed method for tracking/logging
@@ -89,13 +91,14 @@ class EnderNmsContainer extends AbstractContainerMenu {
 		}
 	}
 
-	EnderNmsContainer(int containerId, EnderNmsInventory nmsInventory, Inventory playerInventory, Player player, CreationOptions<EnderChestSlot> creationOptions) {
+	EnderNmsContainer(int containerId, EnderNmsInventory nmsInventory, Inventory playerInventory, Player player, CreationOptions<EnderChestSlot> creationOptions, Scheduler scheduler) {
 		super(determineMenuType(nmsInventory), containerId);
 		
 		this.topRows = nmsInventory.getContainerSize() / 9;
 		this.player = player;
 		this.top = nmsInventory;
 		this.bottom = playerInventory;
+		this.transactions = new SpectatorInventoryTransactionService<>(creationOptions.getPlugin(), scheduler, nmsInventory.targetPlayerUuid, "ender chest");
 
 		this.creationOptions = creationOptions;
 		Target target = Target.byGameProfile(nmsInventory.targetPlayerUuid, nmsInventory.targetPlayerName);

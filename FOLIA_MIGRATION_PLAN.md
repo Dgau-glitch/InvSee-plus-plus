@@ -132,7 +132,7 @@
 - Console sender продолжает работать через безопасный global/command path.
 - Поведение Paper не ломается.
 
-### 7. Устранить data race в NMS-контейнерах spectator inventory
+### 7. Устранить data race в NMS-контейнерах spectator inventory (выполнено для 1.21.11)
 
 **Сделать:**
 - Заменить прямую мутацию live inventory цели из tick-потока зрителя на безопасную модель: snapshot/diff/commit, command queue или transaction service.
@@ -145,7 +145,14 @@
 - При одновременных кликах зрителя и действиях цели нет concurrent modification/thread violation.
 - Есть ручной сценарий проверки: online target, viewer edits, target moves/teleports/logs out.
 
-### 8. Разделить live-player и offline-player flows
+
+
+**Статус 1.21.11:**
+- Paper/Folia и CraftBukkit 1.21.11 `MainNmsContainer`/`EnderNmsContainer` больше не мутируют live inventory цели из tick-потока зрителя: click применяется к snapshot inventory, после чего общий transaction service планирует commit на entity scheduler цели.
+- При конфликте live snapshot отличается от pre-click snapshot: commit abort, snapshot зрителя resync к live состоянию, лог diff не пишется.
+- При retired/offline цели callback не трогает player entity и передает rollback/offline hook в async scheduler; полноценное применение pending diff к offline NBT остается отдельным продолжением задачи 8.
+
+### 8. Разделить live-player и offline-player flows (начато для retired container commits)
 
 **Сделать:**
 - Для online target использовать только entity-owned операции.

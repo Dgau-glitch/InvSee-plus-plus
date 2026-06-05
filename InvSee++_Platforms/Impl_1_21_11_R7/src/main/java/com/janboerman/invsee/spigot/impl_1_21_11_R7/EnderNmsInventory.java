@@ -1,16 +1,10 @@
 package com.janboerman.invsee.spigot.impl_1_21_11_R7;
 
-import java.util.List;
-
 import com.janboerman.invsee.spigot.api.CreationOptions;
+import com.janboerman.invsee.spigot.api.Scheduler;
 import com.janboerman.invsee.spigot.api.target.Target;
 import com.janboerman.invsee.spigot.api.template.EnderChestSlot;
 import com.janboerman.invsee.spigot.internal.inventory.AbstractNmsInventory;
-
-import org.bukkit.craftbukkit.v1_21_R7.entity.CraftHumanEntity;
-import org.bukkit.craftbukkit.v1_21_R7.util.CraftChatMessage;
-
-import net.minecraft.core.NonNullList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
@@ -20,16 +14,24 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.PlayerEnderChestContainer;
 import net.minecraft.world.item.ItemStack;
+import org.bukkit.craftbukkit.entity.CraftHumanEntity;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
+import org.bukkit.craftbukkit.util.CraftChatMessage;
+
+import java.util.ArrayList;
+import java.util.List;
 
 class EnderNmsInventory extends AbstractNmsInventory<EnderChestSlot, EnderBukkitInventory, EnderNmsInventory> implements Container, MenuProvider {
 
-	protected List<ItemStack> storageContents;
+	protected /*NonNull*/List<ItemStack> storageContents;
+	private final Scheduler scheduler;
 
-	EnderNmsInventory(Player target, CreationOptions<EnderChestSlot> creationOptions) {
+	EnderNmsInventory(Player target, CreationOptions<EnderChestSlot> creationOptions, Scheduler scheduler) {
 		super(target.getUUID(), target.getScoreboardName(), creationOptions);
 		PlayerEnderChestContainer inv = target.getEnderChestInventory();
-		this.storageContents = HybridServerSupport.enderChestItems(inv);
+		this.storageContents = copyNms(HybridServerSupport.enderChestItems(inv));
 		this.maxStack = inv.getMaxStackSize();
+		this.scheduler = scheduler;
 	}
 
 	@Override
@@ -56,14 +58,14 @@ class EnderNmsInventory extends AbstractNmsInventory<EnderChestSlot, EnderBukkit
 	@Override
 	public void shallowCopyFrom(EnderNmsInventory from) {
 		this.setMaxStackSize(from.getMaxStackSize());
-		this.storageContents = from.storageContents;
+		this.storageContents = copyNms(from.storageContents);
 		setChanged();
 	}
 
 	//vanilla
 	@Override
 	public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
-		return new EnderNmsContainer(containerId, this, playerInventory, player, creationOptions);
+		return new EnderNmsContainer(containerId, this, playerInventory, player, creationOptions, scheduler);
 	}
 
 	//vanilla
@@ -95,7 +97,7 @@ class EnderNmsInventory extends AbstractNmsInventory<EnderChestSlot, EnderBukkit
 	@Override
 	public ItemStack getItem(int slot) {
 		if (slot < 0 || slot >= getContainerSize()) return ItemStack.EMPTY;
-		
+
 		return storageContents.get(slot);
 	}
 
@@ -124,7 +126,7 @@ class EnderNmsInventory extends AbstractNmsInventory<EnderChestSlot, EnderBukkit
 	@Override
 	public ItemStack removeItem(int slot, int amount) {
 		if (slot < 0 || slot >= getContainerSize()) return ItemStack.EMPTY;
-		
+
 		ItemStack stack = ContainerHelper.removeItem(storageContents, slot, amount);
 		if (!stack.isEmpty()) {
 			this.setChanged();
@@ -136,7 +138,7 @@ class EnderNmsInventory extends AbstractNmsInventory<EnderChestSlot, EnderBukkit
 	@Override
 	public ItemStack removeItemNoUpdate(int slot) {
 		if (slot < 0 || slot >= getContainerSize()) return ItemStack.EMPTY;
-		
+
 		ItemStack stack = storageContents.get(slot);
 		if (stack.isEmpty()) {
 			return ItemStack.EMPTY;
@@ -149,19 +151,19 @@ class EnderNmsInventory extends AbstractNmsInventory<EnderChestSlot, EnderBukkit
 	//vanilla
 	@Override
 	public void setChanged() {
-		//probably don't need to do anything here.
+		// Snapshot inventory; the container transaction service commits changes to the live target.
 	}
 
 	//vanilla
 	@Override
 	public void setItem(int slot, ItemStack itemStack) {
 		if (slot < 0 || slot >= getContainerSize()) return;
-		
+
 		storageContents.set(slot, itemStack);
 		if (!itemStack.isEmpty() && itemStack.getCount() > getMaxStackSize()) {
 			itemStack.setCount(getMaxStackSize());
 		}
-		
+
 		setChanged();
 	}
 
@@ -170,6 +172,46 @@ class EnderNmsInventory extends AbstractNmsInventory<EnderChestSlot, EnderBukkit
 	public boolean stillValid(Player player) {
 		//no chest lock
 		return true;
+	}
+
+	List<org.bukkit.inventory.ItemStack> snapshotBukkit() {
+		List<org.bukkit.inventory.ItemStack> snapshot = new ArrayList<>(storageContents.size());
+		for (ItemStack stack : storageContents) {
+			snapshot.add(CraftItemStack.asBukkitCopy(stack));
+		}
+		return snapshot;
+	}
+
+	void resyncFromBukkitSnapshot(List<org.bukkit.inventory.ItemStack> snapshot) {
+		for (int slot = 0; slot < Math.min(storageContents.size(), snapshot.size()); slot++) {
+			storageContents.set(slot, CraftItemStack.asNMSCopy(snapshot.get(slot)));
+		}
+		setChanged();
+	}
+
+	static List<org.bukkit.inventory.ItemStack> snapshotTarget(Player target) {
+		List<ItemStack> contents = HybridServerSupport.enderChestItems(target.getEnderChestInventory());
+		List<org.bukkit.inventory.ItemStack> snapshot = new ArrayList<>(contents.size());
+		for (ItemStack stack : contents) {
+			snapshot.add(CraftItemStack.asBukkitCopy(stack));
+		}
+		return snapshot;
+	}
+
+	static void applyToTarget(Player target, List<org.bukkit.inventory.ItemStack> snapshot) {
+		List<ItemStack> contents = HybridServerSupport.enderChestItems(target.getEnderChestInventory());
+		for (int slot = 0; slot < Math.min(contents.size(), snapshot.size()); slot++) {
+			contents.set(slot, CraftItemStack.asNMSCopy(snapshot.get(slot)));
+		}
+		target.getEnderChestInventory().setChanged();
+	}
+
+	private static List<ItemStack> copyNms(List<ItemStack> source) {
+		List<ItemStack> copy = new ArrayList<>(source.size());
+		for (ItemStack itemStack : source) {
+			copy.add(itemStack.copy());
+		}
+		return copy;
 	}
 
 }

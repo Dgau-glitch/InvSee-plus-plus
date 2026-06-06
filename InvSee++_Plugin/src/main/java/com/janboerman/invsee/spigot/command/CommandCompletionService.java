@@ -48,7 +48,7 @@ public final class CommandCompletionService {
             scheduler.runAsync(() -> playerDatabase.getAll(this::rememberOfflineName));
         }
 
-        scheduler.runGlobalRepeatedly(this::refreshOnlineSnapshot, 0L, 20L * 60L);
+        scheduler.runGlobalRepeatedly(this::refreshOnlineSnapshot, 1L, 20L * 60L);
     }
 
     public List<String> complete(CommandSender sender, Command command, String[] args) {

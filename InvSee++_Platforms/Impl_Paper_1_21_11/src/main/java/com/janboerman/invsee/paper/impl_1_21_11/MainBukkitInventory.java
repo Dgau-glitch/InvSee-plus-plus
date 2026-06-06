@@ -41,19 +41,19 @@ class MainBukkitInventory extends CraftInventory implements MainInventory<MainNm
 		var top = targetPlayerView.getTopInventory();
 		if (top instanceof CraftInventoryCrafting cic) {
 			CraftingContainer targetCrafting = (CraftingContainer) cic.getInventory();
-			nms.personalContents = targetCrafting.getContents(); //luckily, this does not create a copy.
+			nms.watchPersonalContents(targetCrafting.getContents());
 			placeholderGroup = PlaceholderGroup.CRAFTING;
 		} else if (top instanceof CraftInventoryMerchant cim) {
 			MerchantContainer merchantItems = cim.getInventory();
-			nms.personalContents = merchantItems.getContents().subList(0, 2); //only payment slots
+			nms.watchPersonalContents(merchantItems.getContents().subList(0, 2)); //only payment slots
 			placeholderGroup = PlaceholderGroup.MERCHANT;
 		} else if (top instanceof CraftInventoryEnchanting cie) {
 			Container enchantItems = cie.getInventory();
-			nms.personalContents = enchantItems.getContents();
+			nms.watchPersonalContents(enchantItems.getContents());
 			placeholderGroup = PlaceholderGroup.ENCHANTING;
 		} else if (top instanceof CraftResultInventory cri) {
 			Container inputItems = cri.getInventory();
-			nms.personalContents = inputItems.getContents();
+			nms.watchPersonalContents(inputItems.getContents());
 			placeholderGroup = switch (cri.getType()) {
 				case ANVIL -> PlaceholderGroup.ANVIL;
 				case CARTOGRAPHY -> PlaceholderGroup.CARTOGRAPHY;
@@ -89,7 +89,7 @@ class MainBukkitInventory extends CraftInventory implements MainInventory<MainNm
 	@Override
 	public void unwatch() {
 		MainNmsInventory nms = getInventory();
-		nms.personalContents = nms.craftingContents;
+		nms.unwatchPersonalContents();
 
 		//send personal slots changes
 		for (HumanEntity viewer : getViewers()) {
@@ -113,7 +113,7 @@ class MainBukkitInventory extends CraftInventory implements MainInventory<MainNm
 
 	@Override
 	public ItemStack[] getStorageContents() {
-		return getInventory().nmsPlayerInventory.getNonEquipmentItems().stream()
+		return getInventory().storageItems().stream()
 				.map(CraftItemStack::asCraftMirror)
 				.toArray(ItemStack[]::new);
 	}
@@ -121,18 +121,20 @@ class MainBukkitInventory extends CraftInventory implements MainInventory<MainNm
 	@Override
 	public void setStorageContents(ItemStack[] storageContents) {
 		Objects.requireNonNull(storageContents, "storageContents cannot be null");
-		int storageContentsSize = getInventory().nmsPlayerInventory.getNonEquipmentItems().size();
+		var storageItems = getInventory().storageItems();
+		int storageContentsSize = storageItems.size();
 		if (storageContents.length != storageContentsSize)
 			throw new IllegalArgumentException("storage contents must be of length " + storageContentsSize);
 
 		for (int i = 0; i < storageContentsSize; i++) {
-			getInventory().nmsPlayerInventory.getNonEquipmentItems().set(i, CraftItemStack.asNMSCopy(storageContents[i]));
+			storageItems.set(i, CraftItemStack.asNMSCopy(storageContents[i]));
 		}
+		getInventory().setChanged();
 	}
 
 	@Override
 	public ItemStack[] getArmourContents() {
-		return getInventory().nmsPlayerInventory.getArmorContents().stream()
+		return getInventory().armourItems().stream()
 				.map(CraftItemStack::asCraftMirror)
 				.toArray(ItemStack[]::new);
 	}
@@ -140,58 +142,46 @@ class MainBukkitInventory extends CraftInventory implements MainInventory<MainNm
 	@Override
 	public void setArmourContents(ItemStack[] armourContents) {
 		Objects.requireNonNull(armourContents, "armourContents cannot be null");
-		int armourContentsSize = Inventory.SLOT_OFFHAND - Inventory.INVENTORY_SIZE;
+		var armourItems = getInventory().armourItems();
+		int armourContentsSize = armourItems.size();
 		if (armourContents.length != armourContentsSize)
 			throw new IllegalArgumentException("armour contents must be of length " + armourContentsSize);
 
-		var inv = getInventory().nmsPlayerInventory;
-		int storageContents = inv.getNonEquipmentItems().size();
-
 		for (int i = 0; i < armourContentsSize; i++) {
-			inv.setItem(storageContents + i, CraftItemStack.asNMSCopy(armourContents[i]));
+			armourItems.set(i, CraftItemStack.asNMSCopy(armourContents[i]));
 		}
+		getInventory().setChanged();
 	}
 
 	@Override
 	public ItemStack[] getOffHandContents() {
-		var inv = getInventory().nmsPlayerInventory;
-		// See initialisation of net.minecraft.world.entity.player.Inventory#EQUIPMENT_SLOT_MAPPING.
-		return new ItemStack[] {
-				CraftItemStack.asCraftMirror(inv.getItem(40)),
-				CraftItemStack.asCraftMirror(inv.getItem(41)),
-				CraftItemStack.asCraftMirror(inv.getItem(42))
- 		};
+		return getInventory().offHandItems().stream()
+				.map(CraftItemStack::asCraftMirror)
+				.toArray(ItemStack[]::new);
 	}
 
 	@Override
 	public void setOffHandContents(ItemStack[] offHand) {
 		Objects.requireNonNull(offHand, "offHand cannot be null");
-		int offHandContentsSize = 3;
+		var offHandItems = getInventory().offHandItems();
+		int offHandContentsSize = offHandItems.size();
 		if (offHand.length != offHandContentsSize)
 			throw new IllegalArgumentException("offHand must be of length " + offHandContentsSize);
 
-		var inv = getInventory().nmsPlayerInventory;
 		for (int i = 0; i < offHandContentsSize; i++) {
-			inv.setItem(40 + i, CraftItemStack.asNMSCopy(offHand[i]));
+			offHandItems.set(i, CraftItemStack.asNMSCopy(offHand[i]));
 		}
+		getInventory().setChanged();
 	}
 
 	@Override
 	public void setCursorContents(ItemStack cursor) {
-		var onCursor = getInventory().onCursor;
-		if (onCursor != null) {
-			onCursor.set(CraftItemStack.asNMSCopy(cursor));
-		}
+		getInventory().setCursor(CraftItemStack.asNMSCopy(cursor));
 	}
 
 	@Override
 	public ItemStack getCursorContents() {
-		var onCursor = getInventory().onCursor;
-		if (onCursor != null) {
-			return CraftItemStack.asCraftMirror(onCursor.get());
-		} else {
-			return null;
-		}
+		return CraftItemStack.asCraftMirror(getInventory().getCursor());
 	}
 
 	@Override
@@ -208,6 +198,7 @@ class MainBukkitInventory extends CraftInventory implements MainInventory<MainNm
 			for (int i = 0; i < craftingContentsSize; i++) {
 				nmsCraftingItems.set(i,  CraftItemStack.asNMSCopy(craftingContents[i]));
 			}
+			getInventory().setChanged();
 		}
 	}
 

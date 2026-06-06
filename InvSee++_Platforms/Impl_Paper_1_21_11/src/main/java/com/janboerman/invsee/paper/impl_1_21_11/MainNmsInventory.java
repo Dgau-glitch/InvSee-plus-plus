@@ -28,11 +28,15 @@ class MainNmsInventory extends AbstractNmsInventory<PlayerInventorySlot, MainBuk
 	private static final int SNAPSHOT_SIZE = 54;
 
 	protected final List<ItemStack> storageContents;
+	protected final List<ItemStack> craftingContents;
+	protected List<ItemStack> personalContents;
 	private final Scheduler scheduler;
 
 	protected MainNmsInventory(Player target, CreationOptions<PlayerInventorySlot> creationOptions, Scheduler scheduler) {
 		super(target.getUUID(), target.getScoreboardName(), creationOptions);
 		this.storageContents = NonNullList.withSize(SNAPSHOT_SIZE, ItemStack.EMPTY);
+		this.craftingContents = storageContents.subList(PERSONAL_START, PERSONAL_START + 9);
+		this.personalContents = craftingContents;
 		this.scheduler = scheduler;
 		copyFromTarget(target);
 		this.maxStack = target.getInventory().getMaxStackSize();
@@ -62,8 +66,10 @@ class MainNmsInventory extends AbstractNmsInventory<PlayerInventorySlot, MainBuk
 	@Override
 	public void shallowCopyFrom(MainNmsInventory from) {
 		setMaxStackSize(from.getMaxStackSize());
-		this.storageContents.clear();
-		this.storageContents.addAll(from.storageContents);
+		for (int slot = 0; slot < storageContents.size(); slot++) {
+			storageContents.set(slot, from.storageContents.get(slot));
+		}
+		this.personalContents = this.craftingContents;
 		setChanged();
 	}
 
@@ -196,6 +202,42 @@ class MainNmsInventory extends AbstractNmsInventory<PlayerInventorySlot, MainBuk
 	@Override
 	public boolean stillValid(Player player) {
 		return true;
+	}
+
+	List<ItemStack> storageItems() {
+		return storageContents.subList(0, Inventory.INVENTORY_SIZE);
+	}
+
+	List<ItemStack> armourItems() {
+		return storageContents.subList(Inventory.INVENTORY_SIZE, Inventory.SLOT_OFFHAND);
+	}
+
+	List<ItemStack> offHandItems() {
+		return storageContents.subList(Inventory.SLOT_OFFHAND, TARGET_INVENTORY_END);
+	}
+
+	ItemStack getCursor() {
+		return storageContents.get(CURSOR_SLOT);
+	}
+
+	void setCursor(ItemStack cursor) {
+		storageContents.set(CURSOR_SLOT, cursor == null ? ItemStack.EMPTY : cursor);
+		setChanged();
+	}
+
+	void watchPersonalContents(List<ItemStack> source) {
+		int personalSize = Math.min(9, source.size());
+		for (int slot = 0; slot < 9; slot++) {
+			ItemStack stack = slot < personalSize ? source.get(slot) : ItemStack.EMPTY;
+			craftingContents.set(slot, stack.copy());
+		}
+		personalContents = storageContents.subList(PERSONAL_START, PERSONAL_START + personalSize);
+		setChanged();
+	}
+
+	void unwatchPersonalContents() {
+		personalContents = craftingContents;
+		setChanged();
 	}
 
 	List<org.bukkit.inventory.ItemStack> snapshotBukkit() {

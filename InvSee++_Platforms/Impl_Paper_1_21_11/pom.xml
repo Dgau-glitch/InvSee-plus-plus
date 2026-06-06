@@ -58,7 +58,13 @@
             <groupId>ca.bkaw</groupId>
             <artifactId>paper-nms</artifactId>
             <version>${paper.version}</version>
-            <scope>provided</scope>
+            <!--
+                paper-nms is generated locally by paper-nms-maven-plugin:init.
+                It is not published to PaperMC, so keep it as a local system dependency
+                to avoid Maven trying to download ca.bkaw:paper-nms from remote repositories.
+            -->
+            <scope>system</scope>
+            <systemPath>${user.home}/.m2/repository/ca/bkaw/paper-nms/${paper.version}/paper-nms-${paper.version}.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>com.mojang</groupId>

@@ -14,6 +14,7 @@ import com.janboerman.invsee.spigot.api.EnderSpectatorInventory;
 import com.janboerman.invsee.spigot.api.InvseeAPI;
 import com.janboerman.invsee.spigot.api.response.SpectateResponse;
 import com.janboerman.invsee.spigot.api.target.Target;
+import com.janboerman.invsee.spigot.internal.CommandSenderHelper;
 
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -35,7 +36,7 @@ final class EnderCloneExecutor implements CommandExecutor {
         Target sourceTarget = getTarget(args[0]);
         Target targetTarget = args.length > 1 ? getTarget(args[1]) : asTarget(sender);
         if (targetTarget == null) {
-            sender.sendMessage(ChatColor.RED + "Either execute this command as a player, or provide a target player.");
+            CommandSenderHelper.send(plugin.getApi().getScheduler(), sender, ChatColor.RED + "Either execute this command as a player, or provide a target player.");
             return true;
         }
 
@@ -48,16 +49,16 @@ final class EnderCloneExecutor implements CommandExecutor {
                 .whenCompleteAsync((__, throwable) -> {
                     if (throwable != null) {
                         plugin.getLogger().log(Level.SEVERE, "Error while trying to clone enderchest.", throwable);
-                        sender.sendMessage(ChatColor.RED + "Could not clone enderchest for an unknown reason.");
+                        CommandSenderHelper.send(api.getScheduler(), sender, ChatColor.RED + "Could not clone enderchest for an unknown reason.");
                         return;
                     }
                     SpectateResponse<EnderSpectatorInventory>
                             sourceResponse = sourceFuture.join(),
                             targetResponse = targetFuture.join();
                     if (!sourceResponse.isSuccess()) {
-                        Responses.sendEnderChestError(sender, sourceTarget, sourceResponse.getReason());
+                        Responses.sendEnderChestError(api.getScheduler(), sender, sourceTarget, sourceResponse.getReason());
                     } else if (!targetResponse.isSuccess()) {
-                        Responses.sendEnderChestError(sender, targetTarget, targetResponse.getReason());
+                        Responses.sendEnderChestError(api.getScheduler(), sender, targetTarget, targetResponse.getReason());
                     } else {
                         EnderSpectatorInventory source = sourceResponse.getInventory();
                         EnderSpectatorInventory target = targetResponse.getInventory();
@@ -66,10 +67,10 @@ final class EnderCloneExecutor implements CommandExecutor {
                             api.saveEnderChest(target)
                                     .whenComplete((___, ex) -> {
                                         plugin.getLogger().log(Level.SEVERE, "Error while trying to clone enderchest.", ex);
-                                        sender.sendMessage(ChatColor.RED + "Could not save contents of target enderchest.");
+                                        CommandSenderHelper.send(api.getScheduler(), sender, ChatColor.RED + "Could not save contents of target enderchest.");
                                     });
                         }
-                        sender.sendMessage(ChatColor.GREEN + "Cloned " + sourceTarget + "'s enderchest to " + targetTarget + ".");
+                        CommandSenderHelper.send(api.getScheduler(), sender, ChatColor.GREEN + "Cloned " + sourceTarget + "'s enderchest to " + targetTarget + ".");
                     }
                 }, api.getScheduler()::executeSyncGlobal);
 

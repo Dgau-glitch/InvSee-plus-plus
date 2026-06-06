@@ -213,6 +213,14 @@ public class NamesAndUUIDs {
         return userNameCacheView;
     }
 
+
+    /** Get an async-safe snapshot of cached player names for command completion. */
+    public Set<String> getCachedUserNamesSnapshot() {
+        synchronized (uuidCache) {
+            return new TreeSet<>(uuidCache.keySet());
+        }
+    }
+
     /** Cache a player's unique ID and username. */
     public void cacheNameAndUniqueId(UUID uuid, String userName) {
         this.userNameCache.put(uuid, userName);

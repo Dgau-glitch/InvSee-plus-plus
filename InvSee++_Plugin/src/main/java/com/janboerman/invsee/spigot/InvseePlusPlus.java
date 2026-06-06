@@ -1,6 +1,5 @@
 package com.janboerman.invsee.spigot;
 
-import com.janboerman.invsee.metrics.Metrics;
 import com.janboerman.invsee.paper.AsyncTabCompleter;
 import com.janboerman.invsee.folia.FoliaScheduler;
 import com.janboerman.invsee.spigot.api.CreationOptions;
@@ -12,21 +11,18 @@ import com.janboerman.invsee.spigot.api.logging.LogOptions;
 import com.janboerman.invsee.spigot.api.logging.LogTarget;
 import com.janboerman.invsee.spigot.api.placeholder.PlaceholderPalette;
 import com.janboerman.invsee.spigot.api.target.Target;
-/*
-import com.janboerman.invsee.spigot.multiverseinventories.MultiverseInventoriesHook;
-import com.janboerman.invsee.spigot.multiverseinventories.MultiverseInventoriesSeeApi;
- */
 import com.janboerman.invsee.spigot.api.template.EnderChestSlot;
 import com.janboerman.invsee.spigot.api.template.Mirror;
 import com.janboerman.invsee.spigot.api.template.PlayerInventorySlot;
 import com.janboerman.invsee.spigot.internal.ConstantTitle;
 import com.janboerman.invsee.spigot.internal.InvseePlatform;
+import com.janboerman.invsee.spigot.command.CommandCompletionService;
 import com.janboerman.invsee.spigot.internal.NamesAndUUIDs;
 import com.janboerman.invsee.spigot.internal.OpenSpectatorsCache;
 import com.janboerman.invsee.spigot.api.Scheduler;
 import com.janboerman.invsee.spigot.internal.resolve.ResolveStrategyType;
-import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventoryHook;
-import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventorySeeApi;
+import com.janboerman.invsee.spigot.internal.version.ServerSoftware;
+import com.janboerman.invsee.spigot.internal.version.MinecraftPlatform;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -36,6 +32,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -61,7 +58,7 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
     private CreationOptions<EnderChestSlot> platformCreationOptionsEnderInventory;
     private boolean dirtyConfig = false;
 
-    private Metrics metrics;
+    private volatile boolean shuttingDown;
 
     public InvseePlusPlus() {
         boolean asyncTabCompleteEvent;
@@ -94,25 +91,8 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         //TODO @Deprecated
         this.offlinePlayerProvider = playerDatabase;
 
-        //interop
-        PerWorldInventoryHook pwiHook;
-        //MultiverseInventoriesHook mviHook;
-        if (offlinePlayerSupport() && (pwiHook = new PerWorldInventoryHook(this)).trySetup()) {
-            if (pwiHook.managesEitherInventory()) {
-                this.api = new PerWorldInventorySeeApi(this, lookup, scheduler, cache, platform, pwiHook);
-                getLogger().info("Enabled PerWorldInventory integration.");
-            }
-        }
-//        else if (offlinePlayerSupport() && (mviHook = new MultiverseInventoriesHook(this)).trySetup()) {
-//            this.api = new MultiverseInventoriesSeeApi(this, api, mviHook);
-//            getLogger().info("Enabled Multiverse-Inventories integration.");
-//        }
-        // else if (MyWorlds)
-        // else if (Separe-World-Items)
-
-        else {
-            this.api = new InvseeAPI(this, platform, lookup, scheduler, cache);
-        }
+        // Folia-only build: external inventory integrations are intentionally not wired.
+        this.api = new InvseeAPI(this, platform, lookup, scheduler, cache);
 
         assert this.api != null : "did not set the InvseeAPI instance!";
 
@@ -134,13 +114,10 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         lookup.materialiseUsernameAndUniqueIdResolveStrategies();
 
         //commands
-        setupCommands();
+        CommandCompletionService completions = setupCommands(scheduler, playerDatabase);
 
         //event listeners
-        setupEvents(scheduler, playerDatabase);
-
-        //metrics
-        metrics = Metrics.enable(this);
+        setupEvents(completions);
 
         //idea: shoulder look functionality. an admin will always see the same inventory that the target player sees.
         //can I make it so that the bottom slots show the target player's inventory slots? would probably need to do some nms hacking
@@ -156,8 +133,9 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         }
     }
 
-    private void setupCommands() {
-        InvseeTabCompleter tabCompleter = new InvseeTabCompleter(this);
+    private CommandCompletionService setupCommands(Scheduler scheduler, OfflinePlayerProvider playerDatabase) {
+        CommandCompletionService completions = new CommandCompletionService(this, scheduler, playerDatabase);
+        InvseeTabCompleter tabCompleter = new InvseeTabCompleter(completions);
 
         PluginCommand invseeCommand = getCommand("invsee");
         PluginCommand enderseeCommand = getCommand("endersee");
@@ -169,30 +147,26 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
 
         invseeCommand.setTabCompleter(tabCompleter);
         enderseeCommand.setTabCompleter(tabCompleter);
+        reloadCommand.setTabCompleter(tabCompleter);
+        return completions;
     }
 
-    private void setupEvents(Scheduler scheduler, OfflinePlayerProvider playerDatabase) {
+    private void setupEvents(CommandCompletionService completions) {
         // Pass FileConfiguration config parameter?
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(new SpectatorInventoryEditListener(), this);
 
-        if (offlinePlayerSupport() && tabCompleteOfflinePlayers()) {
-            if (asyncTabcompleteEvent) {
-                pluginManager.registerEvents(new AsyncTabCompleter(this, scheduler, playerDatabase), this);
-            }
+        if (offlinePlayerSupport() && tabCompleteOfflinePlayers() && asyncTabcompleteEvent) {
+            pluginManager.registerEvents(new AsyncTabCompleter(completions), this);
         }
     }
-	
+
 	@Override
 	public void onDisable() {
+        shuttingDown = true;
         if (api != null) { //the api can be null if we are running on unsupported server software.
             api.shutDown(); //complete all inventory futures - ensures /invgive and /endergive will still work even if the server shuts down.
-        }
-
-        if (metrics != null) {
-            metrics.disable();
-            metrics = null;
         }
 	}
 
@@ -426,16 +400,13 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         return YamlConfiguration.loadConfiguration(getConfigFile());
     }
 
-    private static Scheduler makeScheduler(InvseePlusPlus plugin) {
-        boolean folia;
-        try {
-            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
-            folia = true;
-        } catch (ClassNotFoundException e) {
-            folia = false;
-        }
+    public boolean isShuttingDown() {
+        return shuttingDown || !isEnabled();
+    }
 
-        if (folia) {
+    private static Scheduler makeScheduler(InvseePlusPlus plugin) {
+        ServerSoftware serverSoftware = ServerSoftware.detect(plugin.getServer());
+        if (serverSoftware != null && serverSoftware.getPlatform() == MinecraftPlatform.FOLIA) {
             return new FoliaScheduler(plugin);
         } else {
             return new DefaultScheduler(plugin);
@@ -506,10 +477,19 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String alias, String[] args) {
-        sender.sendMessage(ChatColor.YELLOW + "Oh no! It looks like InvSee++ didn't start correctly!");
-        sender.sendMessage(ChatColor.YELLOW + "Most likely this is a Minecraft/InvSee++ version mismatch.");
-        sender.sendMessage(ChatColor.YELLOW + "Check your logs for more information.");
+        send(sender, ChatColor.YELLOW + "Oh no! It looks like InvSee++ didn't start correctly!");
+        send(sender, ChatColor.YELLOW + "Most likely this is a Minecraft/InvSee++ version mismatch.");
+        send(sender, ChatColor.YELLOW + "Check your logs for more information.");
         return true;
+    }
+
+    private void send(CommandSender sender, String message) {
+        if (sender instanceof Player && api != null) {
+            Player player = (Player) sender;
+            api.getScheduler().runEntity(player, () -> player.sendMessage(message), null);
+        } else {
+            sender.sendMessage(message);
+        }
     }
 
     public Path getJarFilePath() {

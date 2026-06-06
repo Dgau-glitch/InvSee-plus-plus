@@ -266,14 +266,14 @@ public class PerWorldInventorySeeApi extends InvseeAPI implements InvseePlatform
                 List<HumanEntity> viewers = new ArrayList<>(mainSpectator.getViewers());   //copy
                 ItemStack[] contents = mainSpectator.getContents();                        //already is a copy
 
-                viewers.forEach(HumanEntity::closeInventory);
+                closeViewers(viewers);
 
                 CompletableFuture<Optional<MainSpectatorInventory>> snapshotFuture = asSnapShotInventory(mainSpectator);
                 snapshotFuture.thenAccept(optional -> ifPresentOrElse(optional, newSpectatorInventory -> {
                     inventories.put(oldProfileKey, newSpectatorInventory);
                     inventoryKeys.put(newSpectatorInventory, oldProfileKey);
                     newSpectatorInventory.setContents(contents);
-                    viewers.forEach(v -> v.openInventory(newSpectatorInventory));
+                    openForViewers(viewers, newSpectatorInventory);
                 }, /*orElse part*/ () -> inventories.remove(oldProfileKey)));
             }
 
@@ -286,7 +286,7 @@ public class PerWorldInventorySeeApi extends InvseeAPI implements InvseePlatform
                     enderchests.put(oldProfileKey, newSpectatorInventory);
                     enderchestKeys.put(newSpectatorInventory, oldProfileKey);
                     newSpectatorInventory.setContents(contents);
-                    viewers.forEach(v -> v.openInventory(newSpectatorInventory));
+                    openForViewers(viewers, newSpectatorInventory);
                 }, /*orElse part*/ () -> enderchests.remove(oldProfileKey)));
             }
         }
@@ -312,7 +312,7 @@ public class PerWorldInventorySeeApi extends InvseeAPI implements InvseePlatform
 
                 List<HumanEntity> viewers = new ArrayList<>(mainSpectator.getViewers());    //copy
                 ItemStack[] contents = mainSpectator.getContents();                         //already is a copy
-                viewers.forEach(HumanEntity::closeInventory);
+                closeViewers(viewers);
 
                 Executor executor = runnable -> scheduler.executeSyncPlayer(newProfileKey.getUuid(), runnable, null);
                 executor.execute(() -> {
@@ -322,7 +322,7 @@ public class PerWorldInventorySeeApi extends InvseeAPI implements InvseePlatform
                         inventories.put(newProfileKey, liveSpectator);
                         inventoryKeys.put(liveSpectator, newProfileKey);
                         liveSpectator.setContents(contents);    //updates the player's inventory!
-                        viewers.forEach(v -> v.openInventory(liveSpectator));
+                        openForViewers(viewers, liveSpectator);
                     }, /*orElse part*/ () -> inventories.remove(newProfileKey));
                 });
             }
@@ -330,7 +330,7 @@ public class PerWorldInventorySeeApi extends InvseeAPI implements InvseePlatform
             if (enderSpectator != null) {
                 List<HumanEntity> viewers = new ArrayList<>(enderSpectator.getViewers());    //copy
                 ItemStack[] contents = enderSpectator.getContents();                         //already is a copy
-                viewers.forEach(HumanEntity::closeInventory);
+                closeViewers(viewers);
 
                 Executor executor = runnable -> scheduler.executeSyncPlayer(newProfileKey.getUuid(), runnable, null);
                 executor.execute(() -> {
@@ -340,7 +340,7 @@ public class PerWorldInventorySeeApi extends InvseeAPI implements InvseePlatform
                         enderchests.put(newProfileKey, liveSpectator);
                         enderchestKeys.put(liveSpectator, newProfileKey);
                         liveSpectator.setContents(contents);
-                        viewers.forEach(v -> v.openInventory(liveSpectator));
+                        openForViewers(viewers, liveSpectator);
                     }, /*orElse part*/ () -> inventories.remove(newProfileKey));
                 });
             }
@@ -351,6 +351,18 @@ public class PerWorldInventorySeeApi extends InvseeAPI implements InvseePlatform
     public OpenResponse<MainSpectatorInventoryView> openMainSpectatorInventory(Player spectator, MainSpectatorInventory spectatorInventory, CreationOptions<PlayerInventorySlot> options) {
         return wrapped.openMainSpectatorInventory(spectator, spectatorInventory, options);
     } //TODO overload with ProfileKey?
+
+    private void closeViewers(Collection<? extends HumanEntity> viewers) {
+        for (HumanEntity viewer : viewers) {
+            scheduler.runEntity(viewer, viewer::closeInventory, null);
+        }
+    }
+
+    private void openForViewers(Collection<? extends HumanEntity> viewers, Inventory inventory) {
+        for (HumanEntity viewer : viewers) {
+            scheduler.runEntity(viewer, () -> viewer.openInventory(inventory), null);
+        }
+    }
 
     @Override
     public MainSpectatorInventory spectateInventory(HumanEntity player, CreationOptions<PlayerInventorySlot> options) {

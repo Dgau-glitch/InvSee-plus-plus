@@ -14,6 +14,7 @@ import com.janboerman.invsee.spigot.api.InvseeAPI;
 import com.janboerman.invsee.spigot.api.MainSpectatorInventory;
 import com.janboerman.invsee.spigot.api.response.SpectateResponse;
 import com.janboerman.invsee.spigot.api.target.Target;
+import com.janboerman.invsee.spigot.internal.CommandSenderHelper;
 
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -35,7 +36,7 @@ final class InvCloneExecutor implements CommandExecutor {
         Target sourceTarget = getTarget(args[0]);
         Target targetTarget = args.length > 1 ? getTarget(args[1]) : asTarget(sender);
         if (targetTarget == null) {
-            sender.sendMessage(ChatColor.RED + "Either execute this command as a player, or provide a target player.");
+            CommandSenderHelper.send(plugin.getApi().getScheduler(), sender, ChatColor.RED + "Either execute this command as a player, or provide a target player.");
             return true;
         }
 
@@ -48,16 +49,16 @@ final class InvCloneExecutor implements CommandExecutor {
                 .whenCompleteAsync((__, throwable) -> {
                     if (throwable != null) {
                         plugin.getLogger().log(Level.SEVERE, "Error while trying to clone inventory.", throwable);
-                        sender.sendMessage(ChatColor.RED + "Could not clone inventory for an unknown reason.");
+                        CommandSenderHelper.send(api.getScheduler(), sender, ChatColor.RED + "Could not clone inventory for an unknown reason.");
                         return;
                     }
                     SpectateResponse<MainSpectatorInventory>
                             sourceResponse = sourceFuture.join(),
                             targetResponse = targetFuture.join();
                     if (!sourceResponse.isSuccess()) {
-                        Responses.sendInventoryError(sender, sourceTarget, sourceResponse.getReason());
+                        Responses.sendInventoryError(api.getScheduler(), sender, sourceTarget, sourceResponse.getReason());
                     } else if (!targetResponse.isSuccess()) {
-                        Responses.sendInventoryError(sender, targetTarget, targetResponse.getReason());
+                        Responses.sendInventoryError(api.getScheduler(), sender, targetTarget, targetResponse.getReason());
                     } else {
                         MainSpectatorInventory source = sourceResponse.getInventory();
                         MainSpectatorInventory target = targetResponse.getInventory();
@@ -66,10 +67,10 @@ final class InvCloneExecutor implements CommandExecutor {
                             api.saveInventory(target)
                                     .whenComplete((___, ex) -> {
                                         plugin.getLogger().log(Level.SEVERE, "Error while trying to clone inventory.", ex);
-                                        sender.sendMessage(ChatColor.RED + "Could not save contents of target inventory.");
+                                        CommandSenderHelper.send(api.getScheduler(), sender, ChatColor.RED + "Could not save contents of target inventory.");
                                     });
                         }
-                        sender.sendMessage(ChatColor.GREEN + "Cloned " + sourceTarget + "'s inventory to " + targetTarget + ".");
+                        CommandSenderHelper.send(api.getScheduler(), sender, ChatColor.GREEN + "Cloned " + sourceTarget + "'s inventory to " + targetTarget + ".");
                     }
                 }, api.getScheduler()::executeSyncGlobal);
 

@@ -1,0 +1,335 @@
+# План полного перехода InvSee++ на Folia 1.21.11
+
+Цель: перевести основной плагин, API и встроенные аддоны на модель Folia без небезопасного доступа к Bukkit/NMS из чужого региона, с компиляционной зависимостью `dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT` и без включения Folia API в итоговый jar.
+
+> Для Gradle-веток использовать `compileOnly("dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT")`. В текущем Maven-проекте эквивалентом является `scope=provided`.
+> Перед каждой реализацией перепроверять актуальные API: Folia Javadocs 1.21.11, Paper docs, Bukkit Javadocs.
+
+## Текущее состояние и риски
+
+- Основной `plugin.yml` и мигрированные встроенные аддоны объявляют `folia-supported: true`; флаг остается валиден только вместе с scheduler/thread-safety миграцией и QA checklist.
+- Модуль `InvSee++_Plugin` использует `dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT` со scope `provided`, а общая `Scheduler`-абстракция моделирует global, async, entity и region операции с cancellable handles.
+- Платформа определяется как `FOLIA` через общий detector, а Folia 1.21.11 предсказуемо выбирает Paper 1.21.11 implementation provider за Folia-safe scheduler/service layer.
+- NMS-контейнеры 1.21.11 переведены с прямой мутации live inventory на snapshot/diff/commit через общий transaction service и target entity scheduler.
+- Команды, tab-completion, listeners, integrations и save/load логика классифицированы по владельцу данных в `FOLIA_THREAD_OWNERSHIP_AUDIT.md`; оставшиеся ограничения integrations оформлены как отдельные QA/compatibility сценарии.
+- Встроенные аддоны Give/Clear/Clone используют общий API/scheduler слой и имеют согласованные Folia flags.
+
+## Правило декомпозиции
+
+Каждый пункт ниже — отдельная задача, которую можно выдать одним сообщением. Не переходить к следующему пункту, пока предыдущий не собран и не проверен. После каждой задачи запускать минимально релевантную сборку/тесты и фиксировать регрессии в плане.
+
+## Статус выполненных задач
+
+### Задача 1 — build-конфигурация Folia 1.21.11
+
+- Выполнено: `InvSee++_Plugin/pom.xml` использует `dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT` со scope `provided`; это Maven-эквивалент Gradle-зависимости `compileOnly("dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT")`.
+- Проверено по конфигурации: Folia API не должен попадать в shaded jar, потому что зависимость объявлена как `provided`, а не `compile`.
+- Решение по модулям: `InvSee++_Common` пока остается на `paper-api`/Bukkit API и не получает прямую зависимость на `folia-api`, потому что публичный common API не принимает Folia-специфичные типы; это снижает связанность и не протекает runtime scheduler-детали в API.
+- Paper/Bukkit/NMS platform modules остаются на своих текущих API до задач 3–14, где будет спроектирован общий scheduler/service layer и отдельный Folia-safe runtime path.
+
+### Задача 2 — явное определение Folia как платформы выполнения
+
+- Выполнено: в модель платформ добавлен `FOLIA`, а определение Folia вынесено в общий detector server software.
+- Выполнено: локальная проверка `RegionizedServer` удалена из выбора scheduler; `InvseePlusPlus` теперь выбирает `FoliaScheduler` через `ServerSoftware.detect(...)`.
+- Выполнено: Folia 1.21.11 зарегистрирована на базе paper-реализации 1.21.11 только как implementation provider, без утверждения о полной thread-safety до выполнения следующих задач плана.
+- Ожидаемое поведение: на Folia 1.21.11 лог detection должен показывать `Folia version 1.21.11`, на Paper detection остается `Paper version ...`, а unsupported-version сообщения теперь имеют отдельную платформу `Folia`.
+
+### Задача 3 — новая DRY-абстракция планировщика
+
+- Выполнено: `Scheduler` расширен модульными `run*`-операциями для global, async, entity и region scopes, включая delayed/repeating варианты там, где они нужны для Folia-safe ownership model.
+- Выполнено: добавлен общий `TaskHandle` для cancellable tasks; legacy `execute*` методы оставлены как deprecated compatibility adapter для `InvseeAPI#getScheduler()` и существующих аддонов/платформенных модулей.
+- Выполнено: callers не зависят от Paper/Folia типов — публичный contract использует Bukkit `Location`, `World`, `HumanEntity`, `UUID` и обычные `Runnable`.
+
+### Задача 4 — FoliaScheduler 1.21.11 поверх Global/Async/Region/Entity scheduler
+
+- Выполнено: `FoliaScheduler` использует `GlobalRegionScheduler` для global tasks, `AsyncScheduler` для async tasks, `RegionScheduler` для location/chunk-owned work и `EntityScheduler` для player/entity-owned work.
+- Выполнено: delayed/repeating операции возвращают `TaskHandle`, который адаптирует Folia `ScheduledTask#cancel()`/`isCancelled()`.
+- Выполнено: `runEntity(UUID, ...)` больше не падает обратно на global scheduler при offline/retired player; вместо этого вызывается `retired` callback, если он задан, и возвращается unscheduled handle.
+
+### Задача 5 — аудит Bukkit/NMS вызовов по thread ownership
+
+- Выполнено: добавлен отдельный аудит `FOLIA_THREAD_OWNERSHIP_AUDIT.md` с таблицами Bukkit/NMS ownership и third-party API ownership.
+- Выполнено: все неопределенные или небезопасные места вынесены в последующие задачи 7–13, включая NMS transaction model, online/offline split, caches, tab-completion и integrations.
+
+### Задача 6 — открытие/закрытие инвентарей и feedback через entity scheduler зрителя
+
+- Выполнено: async open futures в `InvseeAPI` завершают final `openMainSpectatorInventory`/`openEnderSpectatorInventory` на entity scheduler зрителя.
+- Выполнено: core join-transfer закрывает/открывает viewer inventories через entity scheduler каждого viewer; PerWorldInventory исключен из Folia-only Maven reactor.
+- Выполнено: command feedback для player senders отправляется через entity scheduler; console sender остается direct global/command path.
+
+## Задачи миграции
+
+### 1. Обновить build-конфигурацию под Folia 1.21.11
+
+**Сделать:**
+- Обновить Maven-зависимость `dev.folia:folia-api` в `InvSee++_Plugin/pom.xml` до `1.21.11-R0.1-SNAPSHOT` со scope `provided`.
+- Для потенциальной Gradle-ветки зафиксировать эквивалент `compileOnly("dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT")` в документации/комментарии миграции.
+- Проверить, нужен ли перенос `paper-api`/`folia-api` в `InvSee++_Common`, если публичный API начнет принимать Folia-типы напрямую; предпочтительно не протекать Folia-классами в публичные интерфейсы без необходимости.
+
+**Критерии приемки:**
+- Сборка `InvSee++_Plugin` компилируется с Folia API 1.21.11.
+- Folia API не попадает в shaded jar.
+- В плане отмечено, какие модули остаются на Paper/Bukkit API и почему.
+
+### 2. Ввести явное определение Folia как платформы выполнения
+
+**Сделать:**
+- Добавить `FOLIA` в модель платформы/серверного ПО.
+- Перенести `Class.forName("io.papermc.paper.threadedregions.RegionizedServer")` из локальной проверки scheduler в общий detector.
+- Сделать `Setup.setup(...)` логирующим именно Folia, а не только Paper/CraftBukkit.
+- Зарегистрировать Folia 1.21.11 на базе paper-реализации 1.21.11, но не смешивать этот факт с безопасностью потоков.
+
+**Критерии приемки:**
+- На Folia сервер определяется как `Folia version 1.21.11`.
+- На Paper поведение определения версии не меняется.
+- Ошибки unsupported-version показывают Folia отдельно от Paper/CraftBukkit.
+
+### 3. Спроектировать новую DRY-абстракцию планировщика
+
+**Сделать:**
+- Расширить или заменить `Scheduler` на модульную абстракцию с операциями: `global`, `async`, `entity(Player/UUID)`, `region(Location/World+chunk/block)`, delayed/repeating, cancellable task handles и retired-callback.
+- Сохранить backward compatibility для публичного `InvseeAPI#getScheduler()` через adapter/deprecation слой.
+- Убрать дублирование между `DefaultScheduler` и `FoliaScheduler`: общие контракты, проверки thread ownership и error handling вынести в отдельные компоненты.
+
+**Критерии приемки:**
+- Все существующие вызовы scheduler компилируются через adapter.
+- Новые API не требуют от callers знать, Paper это или Folia.
+- Есть тест/проверка компиляции для common + plugin.
+
+### 4. Реализовать FoliaScheduler 1.21.11 поверх Global/Async/Region/Entity scheduler
+
+**Сделать:**
+- Переписать `FoliaScheduler` под Folia 1.21.11 Javadocs.
+- Использовать `EntityScheduler` для операций над игроком/сущностью, `RegionScheduler` для location/world data, `GlobalRegionScheduler` только для global state, `AsyncScheduler` только для неблокирующих/Bukkit-free операций.
+- Нормализовать retired-callback: если player entity retired/offline, задача должна уходить в безопасный offline-flow, а не silently fallback на global.
+
+**Критерии приемки:**
+- Нет fallback с player operation на global scheduler без явного решения вызывающего кода.
+- Delayed/repeating tasks возвращают handles и отменяются на disable.
+- Код не использует deprecated/неофициальные методы.
+
+### 5. Провести аудит всех Bukkit/NMS вызовов по thread ownership
+
+**Сделать:**
+- Составить таблицу всех мест, где вызываются `getOnlinePlayers`, `getPlayer`, permissions, `openInventory`, `closeInventory`, inventory mutation, world/player data save/load, event registration и NMS container access.
+- Для каждого места назначить owner: global, viewer entity, target entity, region или async-only.
+- Отдельно отметить API сторонних плагинов (`Vault`, `LuckPerms`, `PerWorldInventory`, `Multiverse-Inventories`, permission plugins) и допустимые потоки для каждого.
+
+**Критерии приемки:**
+- Таблица добавлена в план или отдельный audit markdown.
+- Все места с неопределенным owner превращены в отдельные последующие задачи.
+- Нет реализации “наугад” без ссылки на официальный API/документацию.
+
+### 6. Исправить открытие/закрытие инвентарей через entity scheduler зрителя
+
+**Сделать:**
+- Все вызовы `viewer.openInventory(...)`, `viewer.closeInventory()`, `player.openInventory(...)`, `player.closeInventory()` выполнять на scheduler владельца viewer/player entity.
+- Для цепочек `CompletableFuture` гарантировать, что final UI action исполняется на entity scheduler зрителя, а не на global scheduler.
+- Ответы команд (`sendMessage`) также выполнять на scheduler отправителя, если отправитель — player.
+
+**Критерии приемки:**
+- Команды `/invsee` и `/endersee` открывают GUI на Folia без thread-check ошибок.
+- Console sender продолжает работать через безопасный global/command path.
+- Поведение Paper не ломается.
+
+### 7. Устранить data race в NMS-контейнерах spectator inventory (выполнено для 1.21.11)
+
+**Сделать:**
+- Заменить прямую мутацию live inventory цели из tick-потока зрителя на безопасную модель: snapshot/diff/commit, command queue или transaction service.
+- Коммит изменений в инвентарь цели выполнять на `EntityScheduler` цели.
+- Для конфликтов реализовать abort/rollback или deterministic merge; логирование difference делать после успешного commit.
+- Вынести общую логику для main/ender containers в reusable service, чтобы не дублировать алгоритм по версиям.
+
+**Критерии приемки:**
+- TODO о Folia data race в 1.21.11 контейнерах закрыты реализацией.
+- При одновременных кликах зрителя и действиях цели нет concurrent modification/thread violation.
+- Есть ручной сценарий проверки: online target, viewer edits, target moves/teleports/logs out.
+
+
+
+**Статус 1.21.11:**
+- Paper/Folia и CraftBukkit 1.21.11 `MainNmsContainer`/`EnderNmsContainer` больше не мутируют live inventory цели из tick-потока зрителя: click применяется к snapshot inventory, после чего общий transaction service планирует commit на entity scheduler цели.
+- При конфликте live snapshot отличается от pre-click snapshot: commit abort, snapshot зрителя resync к live состоянию, лог diff не пишется.
+- При retired/offline цели callback не трогает player entity и передает rollback/offline hook в async scheduler; полноценное применение pending diff к offline NBT остается отдельным продолжением задачи 8.
+
+### 8. Разделить live-player и offline-player flows (начато для retired container commits)
+
+**Сделать:**
+- Для online target использовать только entity-owned операции.
+- Для offline target: file IO/NBT parse/save выполнять async, а любые Bukkit API touchpoints выносить на корректный scheduler.
+- Retired-callback из entity scheduler должен переводить задачу в offline-flow: load data, apply pending diff, save data.
+
+**Критерии приемки:**
+- Нет операций с player entity после retirement/offline.
+- Offline inventory creation/save не блокирует region tick thread.
+- Существующие настройки offline/unknown player support сохраняются.
+
+### 9. Мигрировать cache и pending futures на Folia-safe модель (выполнено)
+
+**Сделать:**
+- Проверить `OpenSpectatorsCache`, pending maps и UUID/name cache на thread-safety и ownership.
+- Определить, какие структуры являются global plugin state, а какие привязаны к player entity.
+- Для shared state использовать thread-safe коллекции или serial executor/service, а не случайные global scheduler вызовы.
+
+**Критерии приемки:**
+- Нет гонок при одновременном открытии одного offline inventory несколькими viewers.
+- Pending futures удаляются корректно при success/failure/disable.
+- `api.shutDown()` завершает/отменяет задачи без зависаний.
+
+
+
+**Статус:**
+- `OpenSpectatorsCache` переведен на `ConcurrentHashMap` с atomic `compute`, stale weak references удаляются compare-remove.
+- Pending main/ender requests вынесены в `PendingSpectatorRequests`: это global plugin state, concurrent viewers одного offline target делят один future через `computeIfAbsent`, stale completion не удаляет новый request.
+- `api.shutDown()` больше не блокируется на `join()` pending futures: pending requests отменяются/очищаются, logger resources закрываются отдельно.
+
+### 10. Перенести команды и tab-completion на Folia-safe command module (выполнено для core commands)
+
+**Сделать:**
+- Разделить commands/tab-completion в отдельный модуль/пакет с shared permission checks и контекстными completions.
+- Проверку permission выполнять до формирования списка completions.
+- Не показывать команды и аргументы игрокам без permission.
+- Offline player completions строить из async-safe cache, а online players читать через безопасный scheduler/снимок.
+
+**Критерии приемки:**
+- `/invsee`, `/endersee`, `/invseeplusplusreload` имеют быстрые и контекстные completions.
+- Игрок без permission не получает подсказки ни через sync tab, ни через async tab event.
+- Нет Bukkit API access из async tab thread, кроме официально разрешенного event context.
+
+
+
+**Статус:**
+- Core completions вынесены в `command.CommandCompletionService`: permission проверяется до построения подсказок, `/invsee`, `/endersee` и `/invseeplusplusreload` используют общий TabCompleter.
+- Async tab-complete читает только thread-safe snapshots (`onlineNames`, `offlineNames`, cached usernames, permission UUID cache) и не вызывает Bukkit online-player API из async event.
+- Offline completions заполняются из async-safe cache/OfflinePlayerProvider; online names и permission subscriptions обновляются запланированным server snapshot и player join/quit events.
+
+### 11. Мигрировать listeners и permission checks (выполнено для core listeners)
+
+**Сделать:**
+- Проверить `InventoryClickEvent`, `PlayerJoinEvent`, permission subscriptions и edit listener на Folia thread ownership.
+- Все операции с конкретным игроком выполнять в его entity context; shared permission snapshots обновлять безопасно.
+- Для сторонних permission APIs оставить async только там, где это официально допустимо; иначе делать sync/entity wrapper.
+
+**Критерии приемки:**
+- Edit permissions продолжают отменять клики без задержек.
+- Join/tab cache обновляется без thread violations.
+- LuckPerms/Vault/legacy permission plugins не вызываются из опасного потока.
+
+
+
+**Статус:**
+- `SpectatorInventoryEditListener` оставлен в event/viewer context: edit permission check выполняется синхронно без задержки и только отменяет `InventoryClickEvent`.
+- Player join path продолжает работать в player entity event context, а tab permission snapshots обновляются через `CommandCompletionService` из scheduled global snapshot и join/quit events.
+- Для command feedback добавлен `CommandSenderHelper`, чтобы ответы игрокам выполнялись через entity scheduler отправителя.
+- Offline exempt/Vault permission checks перенесены с async executor на scheduler global path, чтобы legacy providers не вызывались из произвольного async thread.
+
+### 12. Привести встроенные аддоны к Folia-safe API (выполнено для command feedback/completions)
+
+**Сделать:**
+- Проверить `InvSee++_Give_Plugin`, `InvSee++_Clear_Plugin`, `InvSee++_Clone_Plugin` и общие give/clear/clone modules.
+- Убрать прямые Bukkit scheduler assumptions; все операции проводить через обновленный scheduler/API service.
+- В `plugin.yml` каждого аддона ставить `folia-supported: true` только после фактической проверки.
+
+**Критерии приемки:**
+- Clear/Give/Clone команды работают с online и offline target без thread errors.
+- `InvSee++_Clone_Plugin` больше не имеет `folia-supported: false`, если миграция завершена.
+- Аддоны не дублируют scheduler logic ядра.
+
+
+
+**Статус:**
+- Give/Clear/Clone command feedback переведен на `CommandSenderHelper`; сообщения игрокам больше не отправляются из target/global continuation напрямую.
+- Give/Clear tab-completion теперь permission-first и использует async-safe username cache вместо прямого `getOnlinePlayers`.
+- Clone addon получил tab-completion, общий sender-safe feedback и `folia-supported: true`; Give 1.21.11 setup также регистрирует `FOLIA_1_21_11` через paper implementation.
+
+### 13. Проверить integrations: PerWorldInventory, Multiverse-Inventories и permission plugins (безопасные ограничения добавлены)
+
+**Сделать:**
+- Для каждого integration определить потокобезопасность API.
+- Если API не Folia-safe, добавить adapter с ограничениями или отключать integration на Folia с понятным warning.
+- Для PWI/MVI arguments и completions исключить вызовы стороннего API из async tab thread, если это не разрешено.
+
+**Критерии приемки:**
+- На Folia unsafe integration не ломает ядро.
+- Пользователь видит понятное сообщение, если integration недоступна.
+- Безопасные integrations покрыты smoke-test сценариями.
+
+
+
+**Статус:**
+- PerWorldInventory исключен из Folia-only Maven reactor до подтверждения thread-safety его API; core InvSee++ продолжает работать без integration.
+- Multiverse-Inventories исключен из Folia-only Maven reactor до проверки API guarantees.
+- PWI/MVI argument completions не выполняются из async tab event; async completions ограничены player-name snapshots. Permission plugin lookup остается за existing strategy wrappers: LuckPerms async lookup допустим, legacy providers считаются unsafe до отдельной проверки.
+### 14. Обновить platform modules под Folia 1.21.11 как основной target (выполнено)
+
+**Сделать:**
+- Решить, остается ли поддержка legacy CraftBukkit/Paper в этом репозитории или Folia становится отдельным артефактом/профилем.
+- Если “полностью на Folia” означает отдельный Folia-only артефакт — сократить runtime selection до Folia/Paper 1.21.11 совместимых модулей.
+- Если legacy остается — Folia code path должен быть отдельным и не ухудшать старые версии.
+
+**Критерии приемки:**
+- Сформулирована стратегия артефактов: single jar с legacy или Folia-only jar.
+- 1.21.11 Folia implementation выбирается предсказуемо.
+- Нет accidental classloading несовместимых NMS классов.
+
+**Статус:**
+- Стратегия артефакта: Maven reactor переведен в Folia 1.21.11-only режим; legacy CraftBukkit/Paper, 26.x, Glowstone, PerWorldInventory, Multiverse-Inventories и addon modules больше не входят в root `pom.xml`.
+- Folia code path стал единственным Maven target: `ServerSoftware.detect(...)` должен определить платформу `FOLIA`, `InvseePlusPlus` выбирает `FoliaScheduler`, а `Setup` регистрирует только `FOLIA_1_21_11` на базе совместимого Paper 1.21.11 implementation provider.
+- Legacy modules удалены из Maven reactor и из plugin dependencies, поэтому они не участвуют в сборке и не могут случайно подтягивать несовместимые NMS/API классы.
+
+### 15. Обновить `plugin.yml`, документацию и compatibility matrix (выполнено)
+
+**Сделать:**
+- После завершения технических задач поменять `folia-supported: true` для основного плагина и мигрированных аддонов.
+- Обновить README/wiki: минимальная версия Folia, поддерживаемые Minecraft версии, известные ограничения integrations.
+- Документировать dependency coordinates для Maven и Gradle.
+
+**Критерии приемки:**
+- `folia-supported: true` выставлен только после успешных smoke-tests.
+- Документация явно говорит, что simple flag недостаточен без scheduler/thread-safety миграции.
+- Пользователь понимает, какой jar ставить на Folia 1.21.11.
+
+**Статус:**
+- Основной plugin.yml и мигрированные addons имеют согласованный `folia-supported: true`; перед release publication полный smoke checklist из `FOLIA_QA_PLAN.md` остается обязательным gate.
+- README описывает Folia-only Maven reactor, минимальный Folia target 1.21.11, исключенные integrations/modules и Maven/Gradle dependency coordinates.
+- Документация явно фиксирует, что simple `folia-supported` flag недостаточен без scheduler/thread-safety миграции и QA.
+
+### 16. Добавить тестовый и ручной Folia QA-план (выполнено)
+
+**Сделать:**
+- Добавить checklist запуска на Folia 1.21.11: enable, commands, tab completion, online target, offline target, edit, save, reload, disable.
+- Добавить сценарии с разными регионами: viewer и target далеко друг от друга, target teleport, target logout во время просмотра.
+- Автоматизировать то, что можно проверить компиляцией/unit tests; остальное оформить как smoke-test protocol.
+
+**Критерии приемки:**
+- Есть воспроизводимый QA markdown.
+- Каждый Folia-specific bug фиксируется отдельным регрессионным сценарием.
+- Перед релизом выполняется полный checklist.
+
+**Статус:**
+- Добавлен `FOLIA_QA_PLAN.md` с automated checks, startup/shutdown, commands/tab-completion, online/offline target, addons, integrations, regression registry и release sign-off checklist.
+- Сценарии покрывают разные регионы, teleport, logout/retired entity, concurrent offline requests, reload/disable и pending futures cleanup.
+
+### 17. Финальная стабилизация и cleanup (выполнено для документации и flags; runtime smoke остается release gate)
+
+**Сделать:**
+- Удалить устаревшие TODO/adapter временного периода или превратить их в tracked issues.
+- Проверить DRY: общие transaction/scheduler/command utilities не продублированы по main/ender/give/clear/clone.
+- Провести финальную сборку всех релевантных modules и smoke-test на Folia.
+
+**Критерии приемки:**
+- Нет известных Folia thread violations.
+- Нет несогласованных `folia-supported` flags.
+- Код расширяемый: новая inventory feature подключается через service/API без переписывания ядра.
+
+**Статус:**
+- Устаревшие planning bullets о missing Folia platform, outdated Folia API, main plugin `folia-supported: false` и 1.21.11 NMS data-race TODO заменены на текущее состояние.
+- DRY boundary задокументирован: scheduler, transaction, pending-request и command sender/completion используют общие services/API вместо копирования Folia-specific логики; addon modules исключены из Folia-only Maven reactor.
+- Runtime smoke-test на настоящем Folia сервере оформлен как обязательный pre-release checklist, потому что его нельзя достоверно заменить локальной компиляцией.
+
+## Рекомендуемый порядок выполнения
+
+1. Задачи 1–4: фундамент build/platform/scheduler.
+2. Задачи 5–9: core inventory safety и state management.
+3. Задачи 10–13: user-facing commands, addons, integrations.
+4. Задачи 14–17: packaging, docs, QA и cleanup.

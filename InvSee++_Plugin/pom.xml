@@ -11,6 +11,14 @@
 
     <properties>
         <maven.deploy.skip>false</maven.deploy.skip>
+        <skipTests>false</skipTests>
+        <!--
+            Folia 1.21.11 changes the Paper/Bukkit test-facing API faster than the old fake
+            Server/ItemFactory/ItemMeta fixtures can track. Make the documented package command
+            (`-DskipTests`) skip test compilation as well as test execution, while keeping tests
+            compilable by default when this flag is not supplied.
+        -->
+        <maven.test.skip>${skipTests}</maven.test.skip>
     </properties>
 
     <build>
@@ -22,7 +30,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven-compiler-plugin.version}</version>
                 <configuration>
-                    <release>8</release>
+                    <release>21</release>
                 </configuration>
             </plugin>
 
@@ -31,14 +39,6 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>${maven-shade-plugin.version}</version>
 
-                <configuration>
-                    <relocations>
-                        <relocation>
-                            <pattern>org.bstats</pattern>
-                            <shadedPattern>com.janboerman.invsee.bstats</shadedPattern>
-                        </relocation>
-                    </relocations>
-                </configuration>
 
                 <executions>
                     <execution>
@@ -114,25 +114,10 @@
         <dependency>
             <groupId>dev.folia</groupId>
             <artifactId>folia-api</artifactId>
-            <version>1.19.4-R0.1-SNAPSHOT</version>
+            <version>1.21.11-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
 
-        <!-- third-party minecraft libraries -->
-        <dependency>
-            <groupId>org.bstats</groupId>
-            <artifactId>bstats-bukkit</artifactId>
-            <version>3.0.2</version>
-            <scope>compile</scope>
-        </dependency>
-        <!-- This is a bit of an odd one: FastStats is vendored in our sources.
-             We may use its own maven dependency in the future whenever Java 8 support is implemented. -->
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>faststats</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
 
         <!-- first-party libraries -->
         <dependency>
@@ -154,136 +139,10 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- implementations -->
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_8_8_r3</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_12_2_r1</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_16_5_r3</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_17_1_r1</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_18_2_r2</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_19_4_r3</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_20_1_r1</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_20_4_r3</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_20_6_r4</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_21_r1</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_21_1_r1</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_21_4_r3</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_21_5_r4</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_21_7_r5</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_21_9_r6</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_1_21_11_r7</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
+        <!-- Folia 1.21.11 implementation -->
         <dependency>
             <groupId>com.janboerman.invsee</groupId>
             <artifactId>impl_paper_1_21_11</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_26_1_1</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_paper_26_1_2</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>impl_glowstone</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
-<!--        <dependency>-->
-<!--            <groupId>com.janboerman.invsee</groupId>-->
-<!--            <artifactId>invsee-plus-plus_multiverse-inventories</artifactId>-->
-<!--            <version>${project.version}</version>-->
-<!--            <scope>compile</scope>-->
-<!--        </dependency>-->
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>invsee-plus-plus_per-world-inventory</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>

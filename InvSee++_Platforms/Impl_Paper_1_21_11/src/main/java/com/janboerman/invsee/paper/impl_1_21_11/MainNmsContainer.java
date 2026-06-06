@@ -1,6 +1,8 @@
 package com.janboerman.invsee.paper.impl_1_21_11;
 
 import com.janboerman.invsee.spigot.api.CreationOptions;
+import com.janboerman.invsee.spigot.api.Scheduler;
+import com.janboerman.invsee.spigot.internal.inventory.SpectatorInventoryTransactionService;
 import com.janboerman.invsee.spigot.api.logging.DifferenceTracker;
 import com.janboerman.invsee.spigot.api.logging.LogOptions;
 import com.janboerman.invsee.spigot.api.logging.LogOutput;
@@ -14,6 +16,7 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.plugin.Plugin;
 
@@ -32,6 +35,7 @@ class MainNmsContainer extends AbstractContainerMenu {
 	private final boolean spectatingOwnInventory;
 	private MainBukkitInventoryView bukkitView;
 	final DifferenceTracker tracker;
+	private final SpectatorInventoryTransactionService<List<org.bukkit.inventory.ItemStack>> transactions;
 
 	private static Slot makeSlot(Mirror<PlayerInventorySlot> mirror, boolean spectatingOwnInventory, MainNmsInventory top, int positionIndex, int magicX, int magicY,
 								 ItemStack inaccessiblePlaceholder) {
@@ -77,23 +81,22 @@ class MainNmsContainer extends AbstractContainerMenu {
 	// decorate clicked method for tracking/logging
 	@Override
 	public void clicked(int i, int j, ClickType inventoryclicktype, Player entityhuman) {
-		//TODO Folia: schedule task that is synchronised across both the target player's EntityScheduler as well as the spectator player's EntityScheduler.
-		//TODO because now we have a data race.
-		//TODO when we arrive here, we are in the tick thread of the Spectator player.
-		//TODO an STM-type solution is probably the best - we make changes to a dummy top inventory and commit each change (item diffs) to the real inventory in the target entity scheduler thread.
-		//TODO need to properly take care of aborts/rollbacks if a diff can't be replayed on the real inventory.
-
-		List<org.bukkit.inventory.ItemStack> contentsBefore = null, contentsAfter;
-		if (tracker != null) {
-			contentsBefore = top.getContents().stream().map(CraftItemStack::asBukkitCopy).toList();
+		List<org.bukkit.inventory.ItemStack> contentsBefore;
+		List<org.bukkit.inventory.ItemStack> contentsAfter;
+		synchronized (top) {
+			contentsBefore = top.snapshotBukkit();
+			super.clicked(i, j, inventoryclicktype, entityhuman);
+			contentsAfter = top.snapshotBukkit();
 		}
 
-		super.clicked(i, j, inventoryclicktype, entityhuman);
-
-		if (tracker != null) {
-			contentsAfter = top.getContents().stream().map(CraftItemStack::asBukkitCopy).toList();
-			tracker.onClick(contentsBefore, contentsAfter);
-		}
+		transactions.commit(
+				contentsBefore,
+				contentsAfter,
+				() -> { org.bukkit.entity.Player target = creationOptions.getPlugin().getServer().getPlayer(top.targetPlayerUuid); return target == null ? null : MainNmsInventory.snapshotTarget(((CraftPlayer) target).getHandle()); },
+				after -> { org.bukkit.entity.Player target = creationOptions.getPlugin().getServer().getPlayer(top.targetPlayerUuid); if (target != null) MainNmsInventory.applyToTarget(((CraftPlayer) target).getHandle(), after); },
+				live -> { synchronized (top) { top.resyncFromBukkitSnapshot(live); } },
+				() -> { if (tracker != null) tracker.onClick(contentsBefore, contentsAfter); },
+				() -> { synchronized (top) { top.resyncFromBukkitSnapshot(contentsBefore); } });
 	}
 
 	// decorate removed method for tracking/logging
@@ -106,13 +109,14 @@ class MainNmsContainer extends AbstractContainerMenu {
 		}
 	}
 	
-	MainNmsContainer(int id, MainNmsInventory nmsInventory, Inventory bottomInventory, Player spectator, CreationOptions<PlayerInventorySlot> creationOptions) {
+	MainNmsContainer(int id, MainNmsInventory nmsInventory, Inventory bottomInventory, Player spectator, CreationOptions<PlayerInventorySlot> creationOptions, Scheduler scheduler) {
 		super(MenuType.GENERIC_9x6, id);
 		
 		this.top = nmsInventory;
 		this.bottom = bottomInventory;
 		this.player = spectator;
 		this.spectatingOwnInventory = spectator.getUUID().equals(nmsInventory.targetPlayerUuid);
+		this.transactions = new SpectatorInventoryTransactionService<>(creationOptions.getPlugin(), scheduler, nmsInventory.targetPlayerUuid, "main inventory");
 
 		this.creationOptions = creationOptions;
 		Target target = Target.byGameProfile(nmsInventory.targetPlayerUuid, nmsInventory.targetPlayerName);

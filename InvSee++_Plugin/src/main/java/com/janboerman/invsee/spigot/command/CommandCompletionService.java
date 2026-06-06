@@ -2,10 +2,7 @@ package com.janboerman.invsee.spigot.command;
 
 import com.janboerman.invsee.paper.OfflinePlayerProvider;
 import com.janboerman.invsee.spigot.InvseePlusPlus;
-import com.janboerman.invsee.spigot.api.InvseeAPI;
 import com.janboerman.invsee.spigot.api.Scheduler;
-import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventorySeeApi;
-import com.janboerman.invsee.spigot.perworldinventory.PwiCommandArgs;
 import com.janboerman.invsee.utils.Compat;
 import com.janboerman.invsee.utils.StringHelper;
 import org.bukkit.command.Command;
@@ -62,11 +59,6 @@ public final class CommandCompletionService {
         if (args.length <= 1) {
             String prefix = args.length == 0 ? "" : args[0];
             return completePlayerNames(prefix);
-        }
-
-        InvseeAPI api = plugin.getApi();
-        if (args.length == 2 && api instanceof PerWorldInventorySeeApi) {
-            return PwiCommandArgs.complete(args[1], ((PerWorldInventorySeeApi) api).getHook());
         }
 
         return Compat.emptyList();

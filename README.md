@@ -15,9 +15,8 @@ Just drop the InvSee++.jar file in your server's /plugins folder.
 See also: [What Server Software does InvSee++ support?](#supported-server-software)
 
 ### Commands
-- `/invsee <userName>|<uniqueId> [PWI{...}]`
-- `/endersee <userName>|<uniqueId> [PWI{...}]`
-Note that for integration with PerWorldInventory, `load-data-on-join` needs to be set to `true` in its config.
+- `/invsee <userName>|<uniqueId>`
+- `/endersee <userName>|<uniqueId>`
 - `/invseeplusplusreload`
 
 ### Permissions
@@ -44,6 +43,9 @@ Note that for integration with PerWorldInventory, `load-data-on-join` needs to b
 ## Addons
 
 #### InvSee++_Give
+
+This Folia-only Maven reactor does not build bundled addons by default. Re-add addon modules separately if you need them.
+
 ##### Commands:
 - `/invgive <target player> <item type> [<amount>] [<nbt tag>]`
 - `/endergive <target player> <item type> [<amount>] [<nbt tag>]`
@@ -101,30 +103,16 @@ Anything else can be discussed via the [discussion thread on SpigotMC](https://w
 
 ### Compiling
 
-###### Prerequisites: [JDK-21](https://jdk.java.net/) or newer, [BuildTools](https://www.spigotmc.org/wiki/buildtools/) and [Maven](https://maven.apache.org).
+###### Prerequisites: [JDK-21](https://jdk.java.net/) or newer and [Maven](https://maven.apache.org).
 
-1. Install CraftBukkit into your local repository first by running BuildTools with
-    - `java -jar BuildTools.jar --rev 1.8.8 --compile craftbukkit`
-    - `java -jar BuildTools.jar --rev 1.12.2 --compile craftbukkit`
-    - `java -jar BuildTools.jar --rev 1.16.5 --compile craftbukkit`
-    - `java -jar BuildTools.jar --rev 1.17.1 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.18.2 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.19.4 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.20.1 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.20.4 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.20.6 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 4287 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.21.1 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.21.4 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 1.21.5 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 4522 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 4539 --compile craftbukkit --remapped`
-    - `java -jar BuildTools.jar --rev 4576 --compile craftbukkit --remapped`
-    - `mvn ca.bkaw:paper-nms-maven-plugin:init --pl :impl_paper_1_21_11`
-    - `java -jar BuildTools.jar --rev 4617 --compile craftbukkit`
-    - `mvn ca.bkaw:paper-nms-maven-plugin:init --pl :impl_paper_26_1_2`
-2. In the root directory of this project run `mvn clean package`.
-You can find the plugin jar at InvSee++_plugin/target/InvSee++.jar.
+This branch is a Folia 1.21.11-only Maven build. It does not build legacy CraftBukkit/Paper, 26.x, Glowstone, PerWorldInventory, Multiverse-Inventories or bundled addon modules.
+
+1. From the root directory of this project, initialize the Paper 1.21.11 NMS dependency used by the Folia implementation:
+   - `mvn ca.bkaw:paper-nms-maven-plugin:init --pl :impl_paper_1_21_11`
+2. Build the Folia 1.21.11 plugin jar:
+   - `mvn -pl InvSee++_Plugin -am -DskipTests package`
+
+You can find the plugin jar at InvSee++_Plugin/target/InvSee++.jar.
 
 ### Developers API
 Documentation available on the [wiki](https://github.com/Jannyboy11/InvSee-plus-plus/wiki)!
@@ -146,13 +134,12 @@ In general I support the latest patch release of popularly used Minecraft versio
 
 #### Folia 1.21.11 artifact strategy
 
-InvSee++ continues to publish a single jar that contains the legacy CraftBukkit/Paper runtime selectors and the Folia-safe code path. Folia is not a separate artifact yet: install the normal `InvSee++.jar` on Folia 1.21.11. At runtime the plugin detects Folia explicitly and selects the 1.21.11 Paper implementation behind the Folia scheduler/service layer, while older CraftBukkit/Paper versions keep their existing selectors.
+This branch now publishes a Folia 1.21.11-only `InvSee++.jar`. Install the jar from `InvSee++_Plugin/target/InvSee++.jar` on Folia 1.21.11; legacy CraftBukkit/Paper, 26.x, Glowstone and third-party inventory integrations are not part of this Maven reactor.
 
 The `folia-supported: true` flag in `plugin.yml` is only a compatibility declaration. It is not sufficient by itself: every Bukkit/NMS touchpoint must still use the scheduler, transaction and command services documented in `FOLIA_MIGRATION_PLAN.md`, and the release checklist in `FOLIA_QA_PLAN.md` must pass before publishing a Folia build.
 
 Known Folia integration limits:
-- PerWorldInventory is disabled automatically on Folia until its API thread-safety guarantees are verified; core InvSee++ remains enabled without the integration.
-- Multiverse-Inventories remains disabled on Folia until its API can be audited.
+- PerWorldInventory and Multiverse-Inventories are not included in this Folia-only Maven reactor.
 - LuckPerms lookups use its asynchronous API where available; Vault and legacy permission providers are treated as sync/entity-owned integrations unless their own documentation proves async safety.
 
 Folia API coordinates for developers:
@@ -170,29 +157,18 @@ Folia API coordinates for developers:
 compileOnly("dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT")
 ```
 
-Server support matrix:
-| Server Software            | 1.8.8  | 1.12.2 | 1.16.5  | 1.17.1 | 1.18.2 | 1.19.4  | 1.20.1 | 1.20.4 | 1.20.6  | 1.21.1 | 1.21.4 | 1.21.5 | 1.21.7 | 1.21.8 | 1.21.9 | 1.21.10| 1.21.11 | 26.1.1 |
-|----------------------------|--------|--------|---------|--------|--------|---------|--------|--------|---------|--------|--------|--------|--------|--------|--------|--------|---------|---------|
-| CraftBukkit                | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 1  |
-| Paper                      | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
-| Folia                      | n/a    | n/a    | n/a     | n/a    | n/a    | planned | -      | -      | planned | -      | -      | -      | -      | -      | -      | -      | Tier 2  | planned |
-| UniverseSpigot             | n/a    | n/a    | n/a     | n/a    | n/a    | n/a     | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
-| Other forks of CraftBukkit | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
-| (Neo)Forge/Bukkit hybrids  | Tier 2 | Tier 2 | Tier 2* | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
-| Fabric/Bukkit hybrids      | Tier 2 | Tier 2 | Tier 2* | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2  | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2 | Tier 2  | Tier 2  |
-| Glowstone                  | Tier 2 | Tier 2 | n/a     | n/a    | n/a    | n/a     | n/a    | n/a    | n/a     | n/a    | n/a    | n/a    | n/a    | n/a    | n/a    | n/a    | n/a     | n/a     |
+Server support matrix for this Folia-only Maven reactor:
+| Server Software | 1.21.11 |
+|-----------------|---------|
+| Folia           | Tier 2  |
 
-*The modding frameworks that these servers are based on were released at a time when Minecraft's minimum supported version was Java 8 (or lower),
-and there is a good chance they won't be able to load mods and plugins compiled for newer Java versions.
-
-Is there any server that implements the Bukkit api that I'm missing? Don't hesitate to create [an issue](https://github.com/Jannyboy11/InvSee-plus-plus/issues/new) and request support! 
-
+Other server software and Minecraft versions were removed from this Maven reactor. Re-add the relevant modules explicitly if you need legacy CraftBukkit/Paper, 26.x, Glowstone or hybrid-server builds.
 
 [![Historic Minecraft Version Usage](https://faststats.dev/embed/010faaef-face-4f9d-8288-61621c708031?w=800&h=300)](https://faststats.dev/project/invsee-plus-plus/invsee++)
 
 ### Supported Java versions
-| Minecraft version: | 1.8.x      | 1.12.x     | 1.16.x      | 1.17.x      | 1.18.x      | 1.19.x      | 1.20.[0-4]  | 1.20.[5-6]  | 1.21.x      | 26.x.x      |
-|--------------------|------------|------------|-------------|-------------|-------------|-------------|-------------|-------------|-------------|-------------|
-| Java version:      | 8 or newer | 8 or newer | 11 or newer | 16 or newer | 17 or newer | 17 or newer | 17 or newer | 21 or newer | 21 or newer | 25 or newer |
+| Minecraft version: | 1.21.11      |
+|--------------------|--------------|
+| Java version:      | 21 or newer |
 
 [![Java Versions](https://faststats.dev/embed/dc2e7402-115d-457d-a230-c025ba101968?w=600&h=300)](https://faststats.dev/project/invsee-plus-plus/invsee++)

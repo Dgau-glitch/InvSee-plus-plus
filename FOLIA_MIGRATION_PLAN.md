@@ -54,7 +54,7 @@
 ### Задача 6 — открытие/закрытие инвентарей и feedback через entity scheduler зрителя
 
 - Выполнено: async open futures в `InvseeAPI` завершают final `openMainSpectatorInventory`/`openEnderSpectatorInventory` на entity scheduler зрителя.
-- Выполнено: core join-transfer и PerWorldInventory profile-transfer закрывают/открывают viewer inventories через entity scheduler каждого viewer.
+- Выполнено: core join-transfer закрывает/открывает viewer inventories через entity scheduler каждого viewer; PerWorldInventory исключен из Folia-only Maven reactor.
 - Выполнено: command feedback для player senders отправляется через entity scheduler; console sender остается direct global/command path.
 
 ## Задачи миграции
@@ -257,8 +257,8 @@
 
 
 **Статус:**
-- PerWorldInventory автоматически отключается на Folia с warning до подтверждения thread-safety его API; core InvSee++ продолжает работать без integration.
-- Multiverse-Inventories остается неактивным/неподключенным на Folia до проверки API guarantees.
+- PerWorldInventory исключен из Folia-only Maven reactor до подтверждения thread-safety его API; core InvSee++ продолжает работать без integration.
+- Multiverse-Inventories исключен из Folia-only Maven reactor до проверки API guarantees.
 - PWI/MVI argument completions не выполняются из async tab event; async completions ограничены player-name snapshots. Permission plugin lookup остается за existing strategy wrappers: LuckPerms async lookup допустим, legacy providers считаются unsafe до отдельной проверки.
 ### 14. Обновить platform modules под Folia 1.21.11 как основной target (выполнено)
 
@@ -273,9 +273,9 @@
 - Нет accidental classloading несовместимых NMS классов.
 
 **Статус:**
-- Стратегия артефакта: сохраняется single jar с legacy CraftBukkit/Paper runtime selection; отдельный Folia-only artifact пока не вводится, чтобы не ломать существующих пользователей и addons.
-- Folia code path изолирован: `ServerSoftware.detect(...)` определяет платформу `FOLIA`, `InvseePlusPlus` выбирает `FoliaScheduler`, а `Setup` регистрирует `FOLIA_1_21_11` на базе совместимого Paper 1.21.11 implementation provider.
-- Legacy modules не сокращаются и не получают прямую зависимость на Folia API; несовместимые NMS классы продолжают загружаться только через существующий version/platform selector.
+- Стратегия артефакта: Maven reactor переведен в Folia 1.21.11-only режим; legacy CraftBukkit/Paper, 26.x, Glowstone, PerWorldInventory, Multiverse-Inventories и addon modules больше не входят в root `pom.xml`.
+- Folia code path стал единственным Maven target: `ServerSoftware.detect(...)` должен определить платформу `FOLIA`, `InvseePlusPlus` выбирает `FoliaScheduler`, а `Setup` регистрирует только `FOLIA_1_21_11` на базе совместимого Paper 1.21.11 implementation provider.
+- Legacy modules удалены из Maven reactor и из plugin dependencies, поэтому они не участвуют в сборке и не могут случайно подтягивать несовместимые NMS/API классы.
 
 ### 15. Обновить `plugin.yml`, документацию и compatibility matrix (выполнено)
 
@@ -291,7 +291,7 @@
 
 **Статус:**
 - Основной plugin.yml и мигрированные addons имеют согласованный `folia-supported: true`; перед release publication полный smoke checklist из `FOLIA_QA_PLAN.md` остается обязательным gate.
-- README описывает single-jar стратегию, минимальный Folia target 1.21.11, compatibility matrix, известные ограничения PerWorldInventory/Multiverse-Inventories/permission providers и Maven/Gradle dependency coordinates.
+- README описывает Folia-only Maven reactor, минимальный Folia target 1.21.11, исключенные integrations/modules и Maven/Gradle dependency coordinates.
 - Документация явно фиксирует, что simple `folia-supported` flag недостаточен без scheduler/thread-safety миграции и QA.
 
 ### 16. Добавить тестовый и ручной Folia QA-план (выполнено)
@@ -324,7 +324,7 @@
 
 **Статус:**
 - Устаревшие planning bullets о missing Folia platform, outdated Folia API, main plugin `folia-supported: false` и 1.21.11 NMS data-race TODO заменены на текущее состояние.
-- DRY boundary задокументирован: scheduler, transaction, pending-request, command sender/completion и addon flows используют общие services/API вместо копирования Folia-specific логики.
+- DRY boundary задокументирован: scheduler, transaction, pending-request и command sender/completion используют общие services/API вместо копирования Folia-specific логики; addon modules исключены из Folia-only Maven reactor.
 - Runtime smoke-test на настоящем Folia сервере оформлен как обязательный pre-release checklist, потому что его нельзя достоверно заменить локальной компиляцией.
 
 ## Рекомендуемый порядок выполнения

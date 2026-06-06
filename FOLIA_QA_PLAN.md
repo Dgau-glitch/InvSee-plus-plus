@@ -1,19 +1,18 @@
 # Folia 1.21.11 QA plan
 
-This checklist is the release gate for publishing InvSee++ with `folia-supported: true`. It covers the single-jar strategy used by this repository: the normal InvSee++ jar is installed on Folia 1.21.11, and runtime detection must select the Folia scheduler plus the compatible 1.21.11 platform implementation.
+This checklist is the release gate for publishing InvSee++ with `folia-supported: true`. It covers the Folia 1.21.11-only Maven reactor: the `InvSee++_Plugin/target/InvSee++.jar` artifact is installed on Folia 1.21.11, and runtime detection must select the Folia scheduler plus the compatible 1.21.11 platform implementation.
 
 ## 1. Test environment
 
 - Server: Folia `1.21.11-R0.1-SNAPSHOT` or the exact release build used for the target publication.
-- Java: Java 21 or newer for Minecraft 1.21.11 runtime. If the full Maven reactor includes 26.x modules, compile them with the Java version required by that module line before release.
+- Java: Java 21 or newer for Minecraft 1.21.11 runtime and this Folia-only Maven reactor.
 - Plugins to install for the baseline pass:
   - `InvSee++.jar` from `InvSee++_Plugin/target/`.
-  - Migrated bundled addons: Give, Clear and Clone.
+  - Do not install bundled addons for this Folia-only Maven target unless they are re-added to the reactor and tested separately.
   - No PerWorldInventory or Multiverse-Inventories during the baseline pass.
 - Plugins to install for integration passes:
   - LuckPerms, Vault and one legacy permission provider at a time.
-  - PerWorldInventory only for the disabled-on-Folia warning check.
-  - Multiverse-Inventories only for the disabled/unsupported integration check.
+  - PerWorldInventory and Multiverse-Inventories are not part of this Folia-only Maven target; test them only after explicitly re-adding integration modules.
 
 ## 2. Automated checks before starting Folia
 
@@ -24,8 +23,7 @@ Run these checks from the repository root and record the command, Java version a
 | Patch hygiene | `git diff --check` | No whitespace or conflict-marker errors. |
 | Common API compile | `mvn -pl InvSee++_Common -am -DskipTests compile` | Compiles with scheduler/API abstractions. |
 | Plugin compile/package | `mvn -pl InvSee++_Plugin -am -DskipTests package` | Produces the main jar and resolves Folia API as `provided`. |
-| Addon compile | `mvn -pl InvSee++_Give_Plugin,InvSee++_Clear_Plugin,InvSee++_Clone_Plugin -am -DskipTests compile` | Addons compile against the shared scheduler/API services. |
-| Integration compile | `mvn -pl InvSee++_PerWorldInventory -am -DskipTests compile` | Integration compiles; runtime remains disabled on Folia until audited. |
+| Folia NMS init | `mvn ca.bkaw:paper-nms-maven-plugin:init --pl :impl_paper_1_21_11` | Installs the local `ca.bkaw:paper-nms:1.21.11-SNAPSHOT` dependency required by the Paper/Folia implementation. |
 
 ## 3. Startup and shutdown checklist
 
@@ -84,8 +82,8 @@ Use two real players, `viewer` and `target`. Repeat all checks for main inventor
 
 | Step | Scenario | Expected result |
 | --- | --- | --- |
-| FOLIA-INT-001 | Start Folia with PerWorldInventory installed. | InvSee++ logs that PerWorldInventory integration is disabled on Folia; core functionality remains enabled. |
-| FOLIA-INT-002 | Start Folia with Multiverse-Inventories installed. | Integration remains disabled/unsupported; core functionality remains enabled. |
+| FOLIA-INT-001 | Verify the generated jar with PerWorldInventory absent from the Maven reactor. | Core functionality remains enabled and no PWI classes are packaged. |
+| FOLIA-INT-002 | Verify the generated jar with Multiverse-Inventories absent from the Maven reactor. | Core functionality remains enabled and no MVI classes are packaged. |
 | FOLIA-INT-003 | Run edit-permission checks with LuckPerms. | Async LuckPerms lookups do not block entity threads and click cancellation remains immediate. |
 | FOLIA-INT-004 | Run edit-permission checks with Vault or a legacy permission provider. | Provider calls are not made from arbitrary async tab threads; unsafe providers are wrapped or documented as unsupported. |
 
@@ -108,7 +106,7 @@ A Folia release candidate is ready only when all of these are checked:
 - [ ] Command/tab-completion checklist passed for operator, console and no-permission players.
 - [ ] Online target scenarios passed for main inventory and ender chest.
 - [ ] Offline target scenarios passed for main inventory and ender chest.
-- [ ] Give, Clear and Clone addon smoke tests passed.
-- [ ] Unsafe integrations are disabled with clear warnings or covered by an adapter smoke test.
+- [ ] Give, Clear and Clone addon smoke tests are skipped for this Folia-only Maven target or passed after re-adding the addon modules separately.
+- [ ] Unsafe integrations are absent from the Maven reactor, disabled with clear warnings or covered by an adapter smoke test.
 - [ ] No known Folia thread-check warning remains untracked.
 - [ ] Any new Folia-specific bug has a regression row in section 9.

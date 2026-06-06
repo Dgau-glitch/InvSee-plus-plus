@@ -2,7 +2,6 @@ package com.janboerman.invsee.metrics;
 
 import com.janboerman.invsee.faststats.FastStats;
 import com.janboerman.invsee.spigot.InvseePlusPlus;
-import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventorySeeApi;
 import com.janboerman.invsee.utils.Compat;
 
 import java.io.IOException;
@@ -72,18 +71,7 @@ public final class Metrics {
     }
 
     private static String getBackendMetric(InvseePlusPlus plugin) {
-        if (plugin.getApi() instanceof PerWorldInventorySeeApi) {
-            return "PerWorldInventory";
-//            } else if (this.api instanceof MultiverseInventoriesSeeApi) {
-//                return "Multiverse-Inventories";
-        }
-        //else if: MyWorlds
-        //else if: Separe-World-Items
-        //else if: PolyVerse (Lokka30/ArcanePlugins)
-        //else if: World (TheNextLvl) / PerWorlds (NonSwag)
-        else {
-            return "Vanilla";
-        }
+        return "Folia";
     }
 
     private static TimePeriod getTimePeriod(Instant from) {

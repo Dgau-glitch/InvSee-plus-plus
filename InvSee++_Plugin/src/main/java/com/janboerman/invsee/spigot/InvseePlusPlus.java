@@ -12,10 +12,6 @@ import com.janboerman.invsee.spigot.api.logging.LogOptions;
 import com.janboerman.invsee.spigot.api.logging.LogTarget;
 import com.janboerman.invsee.spigot.api.placeholder.PlaceholderPalette;
 import com.janboerman.invsee.spigot.api.target.Target;
-/*
-import com.janboerman.invsee.spigot.multiverseinventories.MultiverseInventoriesHook;
-import com.janboerman.invsee.spigot.multiverseinventories.MultiverseInventoriesSeeApi;
- */
 import com.janboerman.invsee.spigot.api.template.EnderChestSlot;
 import com.janboerman.invsee.spigot.api.template.Mirror;
 import com.janboerman.invsee.spigot.api.template.PlayerInventorySlot;
@@ -28,9 +24,6 @@ import com.janboerman.invsee.spigot.api.Scheduler;
 import com.janboerman.invsee.spigot.internal.resolve.ResolveStrategyType;
 import com.janboerman.invsee.spigot.internal.version.ServerSoftware;
 import com.janboerman.invsee.spigot.internal.version.MinecraftPlatform;
-import com.janboerman.invsee.spigot.internal.version.ServerSoftware;
-import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventoryHook;
-import com.janboerman.invsee.spigot.perworldinventory.PerWorldInventorySeeApi;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -100,27 +93,8 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         //TODO @Deprecated
         this.offlinePlayerProvider = playerDatabase;
 
-        //interop
-        PerWorldInventoryHook pwiHook;
-        //MultiverseInventoriesHook mviHook;
-        if (offlinePlayerSupport() && (pwiHook = new PerWorldInventoryHook(this)).trySetup()) {
-            if (ServerSoftware.isFolia()) {
-                getLogger().warning("PerWorldInventory integration is disabled on Folia until its API thread-safety guarantees are verified. Core InvSee++ remains enabled.");
-            } else if (pwiHook.managesEitherInventory()) {
-                this.api = new PerWorldInventorySeeApi(this, lookup, scheduler, cache, platform, pwiHook);
-                getLogger().info("Enabled PerWorldInventory integration.");
-            }
-        }
-//        else if (offlinePlayerSupport() && (mviHook = new MultiverseInventoriesHook(this)).trySetup()) {
-//            this.api = new MultiverseInventoriesSeeApi(this, api, mviHook);
-//            getLogger().info("Enabled Multiverse-Inventories integration.");
-//        }
-        // else if (MyWorlds)
-        // else if (Separe-World-Items)
-
-        else {
-            this.api = new InvseeAPI(this, platform, lookup, scheduler, cache);
-        }
+        // Folia-only build: external inventory integrations are intentionally not wired.
+        this.api = new InvseeAPI(this, platform, lookup, scheduler, cache);
 
         assert this.api != null : "did not set the InvseeAPI instance!";
 

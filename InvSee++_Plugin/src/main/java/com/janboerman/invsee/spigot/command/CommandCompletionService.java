@@ -1,6 +1,7 @@
 package com.janboerman.invsee.spigot.command;
 
-import com.janboerman.invsee.paper.OfflinePlayerProvider;
+import com.janboerman.invsee.spigot.api.InvseeAPI;
+import com.janboerman.invsee.spigot.api.OfflinePlayerProvider;
 import com.janboerman.invsee.spigot.InvseePlusPlus;
 import com.janboerman.invsee.spigot.api.Scheduler;
 import com.janboerman.invsee.utils.Compat;

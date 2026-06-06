@@ -21,26 +21,31 @@ public class DefaultScheduler implements Scheduler {
 
     @Override
     public TaskHandle runEntity(UUID playerId, Runnable task, Runnable retired) {
+        if (plugin.isShuttingDown()) return runInline(task);
         return runGlobal(task);
     }
 
     @Override
     public TaskHandle runEntity(HumanEntity entity, Runnable task, Runnable retired) {
+        if (plugin.isShuttingDown()) return runInline(task);
         return runGlobal(task);
     }
 
     @Override
     public TaskHandle runEntityDelayed(HumanEntity entity, Runnable task, Runnable retired, long delayTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return runGlobalDelayed(task, delayTicks);
     }
 
     @Override
     public TaskHandle runEntityRepeatedly(HumanEntity entity, Runnable task, Runnable retired, long initialDelayTicks, long periodTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return runGlobalRepeatedly(task, initialDelayTicks, periodTicks);
     }
 
     @Override
     public TaskHandle runGlobal(Runnable task) {
+        if (plugin.isShuttingDown()) return runInline(task);
         if (plugin.getServer().isPrimaryThread()) {
             task.run();
             return Scheduler.completedTask();
@@ -51,11 +56,13 @@ public class DefaultScheduler implements Scheduler {
 
     @Override
     public TaskHandle runGlobalRepeatedly(Runnable task, long ticksInitialDelay, long ticksPeriod) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return bukkitTask(plugin.getServer().getScheduler().runTaskTimer(plugin, task, ticksInitialDelay, ticksPeriod));
     }
 
     @Override
     public TaskHandle runAsync(Runnable task) {
+        if (plugin.isShuttingDown()) return runInline(task);
         if (!plugin.getServer().isPrimaryThread()) {
             task.run();
             return Scheduler.completedTask();
@@ -66,16 +73,19 @@ public class DefaultScheduler implements Scheduler {
 
     @Override
     public TaskHandle runAsyncRepeatedly(Runnable task, long initialDelayTicks, long periodTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return bukkitTask(plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, task, initialDelayTicks, periodTicks));
     }
 
     @Override
     public TaskHandle runGlobalDelayed(Runnable task, long delayTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return bukkitTask(plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks));
     }
 
     @Override
     public TaskHandle runAsyncDelayed(Runnable task, long delayTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return bukkitTask(plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, task, delayTicks));
     }
 
@@ -97,6 +107,11 @@ public class DefaultScheduler implements Scheduler {
     @Override
     public TaskHandle runRegionRepeatedly(Location location, Runnable task, long initialDelayTicks, long periodTicks) {
         return runGlobalRepeatedly(task, initialDelayTicks, periodTicks);
+    }
+
+    private static TaskHandle runInline(Runnable task) {
+        task.run();
+        return Scheduler.completedTask();
     }
 
     private static TaskHandle bukkitTask(BukkitTask task) {

@@ -67,6 +67,7 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
     private boolean dirtyConfig = false;
 
     private Metrics metrics;
+    private volatile boolean shuttingDown;
 
     public InvseePlusPlus() {
         boolean asyncTabCompleteEvent;
@@ -194,6 +195,7 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
 
 	@Override
 	public void onDisable() {
+        shuttingDown = true;
         if (api != null) { //the api can be null if we are running on unsupported server software.
             api.shutDown(); //complete all inventory futures - ensures /invgive and /endergive will still work even if the server shuts down.
         }
@@ -432,6 +434,10 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
 
     private FileConfiguration loadConfig() {
         return YamlConfiguration.loadConfiguration(getConfigFile());
+    }
+
+    public boolean isShuttingDown() {
+        return shuttingDown || !isEnabled();
     }
 
     private static Scheduler makeScheduler(InvseePlusPlus plugin) {

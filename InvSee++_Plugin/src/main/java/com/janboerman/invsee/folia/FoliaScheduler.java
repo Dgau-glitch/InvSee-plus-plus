@@ -46,6 +46,7 @@ public class FoliaScheduler implements Scheduler {
 
     @Override
     public TaskHandle runEntity(UUID playerId, Runnable task, Runnable retired) {
+        if (plugin.isShuttingDown()) return runInline(task);
         Server server = plugin.getServer();
         Player player = server.getPlayer(playerId);
         if (player == null) {
@@ -60,70 +61,88 @@ public class FoliaScheduler implements Scheduler {
 
     @Override
     public TaskHandle runEntity(HumanEntity entity, Runnable task, Runnable retired) {
+        if (plugin.isShuttingDown()) return runInline(task);
         ScheduledTask scheduledTask = entity.getScheduler().run(plugin, ignored -> task.run(), retired);
         return foliaTask(scheduledTask);
     }
 
     @Override
     public TaskHandle runEntityDelayed(HumanEntity entity, Runnable task, Runnable retired, long delayTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         ScheduledTask scheduledTask = entity.getScheduler().runDelayed(plugin, ignored -> task.run(), retired, delayTicks);
         return foliaTask(scheduledTask);
     }
 
     @Override
     public TaskHandle runEntityRepeatedly(HumanEntity entity, Runnable task, Runnable retired, long initialDelayTicks, long periodTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         ScheduledTask scheduledTask = entity.getScheduler().runAtFixedRate(plugin, ignored -> task.run(), retired, initialDelayTicks, periodTicks);
         return foliaTask(scheduledTask);
     }
 
     @Override
     public TaskHandle runGlobal(Runnable task) {
+        if (plugin.isShuttingDown()) return runInline(task);
         return foliaTask(plugin.getServer().getGlobalRegionScheduler().run(plugin, ignored -> task.run()));
     }
 
     @Override
     public TaskHandle runGlobalRepeatedly(Runnable task, long ticksInitialDelay, long ticksPeriod) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return foliaTask(plugin.getServer().getGlobalRegionScheduler().runAtFixedRate(plugin, ignored -> task.run(), ticksInitialDelay, ticksPeriod));
     }
 
     @Override
     public TaskHandle runAsync(Runnable task) {
+        if (plugin.isShuttingDown()) return runInline(task);
         return foliaTask(plugin.getServer().getAsyncScheduler().runNow(plugin, ignored -> task.run()));
     }
 
     @Override
     public TaskHandle runAsyncRepeatedly(Runnable task, long initialDelayTicks, long periodTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return foliaTask(plugin.getServer().getAsyncScheduler().runAtFixedRate(plugin, ignored -> task.run(), ticksToMillis(initialDelayTicks), ticksToMillis(periodTicks), TimeUnit.MILLISECONDS));
     }
 
     @Override
     public TaskHandle runGlobalDelayed(Runnable task, long delayTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return foliaTask(plugin.getServer().getGlobalRegionScheduler().runDelayed(plugin, ignored -> task.run(), delayTicks));
     }
 
     @Override
     public TaskHandle runAsyncDelayed(Runnable task, long delayTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return foliaTask(plugin.getServer().getAsyncScheduler().runDelayed(plugin, ignored -> task.run(), ticksToMillis(delayTicks), TimeUnit.MILLISECONDS));
     }
 
     @Override
     public TaskHandle runRegion(Location location, Runnable task) {
+        if (plugin.isShuttingDown()) return runInline(task);
         return foliaTask(plugin.getServer().getRegionScheduler().run(plugin, location, ignored -> task.run()));
     }
 
     @Override
     public TaskHandle runRegion(World world, int chunkX, int chunkZ, Runnable task) {
+        if (plugin.isShuttingDown()) return runInline(task);
         return foliaTask(plugin.getServer().getRegionScheduler().run(plugin, world, chunkX, chunkZ, ignored -> task.run()));
     }
 
     @Override
     public TaskHandle runRegionDelayed(Location location, Runnable task, long delayTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return foliaTask(plugin.getServer().getRegionScheduler().runDelayed(plugin, location, ignored -> task.run(), delayTicks));
     }
 
     @Override
     public TaskHandle runRegionRepeatedly(Location location, Runnable task, long initialDelayTicks, long periodTicks) {
+        if (plugin.isShuttingDown()) return Scheduler.unscheduledTask();
         return foliaTask(plugin.getServer().getRegionScheduler().runAtFixedRate(plugin, location, ignored -> task.run(), initialDelayTicks, periodTicks));
+    }
+
+    private static TaskHandle runInline(Runnable task) {
+        task.run();
+        return Scheduler.completedTask();
     }
 
     private static long ticksToMillis(long ticks) {

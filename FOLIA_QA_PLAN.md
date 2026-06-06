@@ -23,7 +23,7 @@ Run these checks from the repository root and record the command, Java version a
 | Patch hygiene | `git diff --check` | No whitespace or conflict-marker errors. |
 | Common API compile | `mvn -pl InvSee++_Common -am -DskipTests compile` | Compiles with scheduler/API abstractions. |
 | Plugin compile/package | `mvn -pl InvSee++_Plugin -am -DskipTests package` | Produces the main jar and resolves Folia API as `provided`. |
-| Folia NMS init | `mvn ca.bkaw:paper-nms-maven-plugin:init --pl :impl_paper_1_21_11` | Installs the local `ca.bkaw:paper-nms:1.21.11-SNAPSHOT` dependency required by the Paper/Folia implementation. |
+| Folia NMS init | `mvn -U ca.bkaw:paper-nms-maven-plugin:1.4.10:init --pl :impl_paper_1_21_11` | Generates the local `ca.bkaw:paper-nms:1.21.11-SNAPSHOT` dependency required by the Paper/Folia implementation; this artifact is not published to PaperMC. |
 
 ## 3. Startup and shutdown checklist
 

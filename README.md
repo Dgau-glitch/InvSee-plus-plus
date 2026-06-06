@@ -107,10 +107,12 @@ Anything else can be discussed via the [discussion thread on SpigotMC](https://w
 
 This branch is a Folia 1.21.11-only Maven build. It does not build legacy CraftBukkit/Paper, 26.x, Glowstone, PerWorldInventory, Multiverse-Inventories or bundled addon modules.
 
-1. From the root directory of this project, initialize the Paper 1.21.11 NMS dependency used by the Folia implementation:
-   - `mvn ca.bkaw:paper-nms-maven-plugin:init --pl :impl_paper_1_21_11`
-2. Build the Folia 1.21.11 plugin jar:
+1. From the root directory of this project, initialize the Paper 1.21.11 NMS dependency used by the Folia implementation. This generates `ca.bkaw:paper-nms:1.21.11-SNAPSHOT` in your local Maven repository; it is not downloaded from PaperMC.
+   - `mvn -U ca.bkaw:paper-nms-maven-plugin:1.4.10:init --pl :impl_paper_1_21_11`
+2. Build the Folia 1.21.11 plugin jar from the root reactor:
    - `mvn -pl InvSee++_Plugin -am -DskipTests package`
+
+If Maven says `Could not find artifact ca.bkaw:paper-nms:jar:1.21.11-SNAPSHOT in papermc` or `at specified path .../.m2/repository/ca/bkaw/paper-nms/...`, the init command in step 1 has not completed successfully for the same local Maven repository that step 2 uses.
 
 You can find the plugin jar at InvSee++_Plugin/target/InvSee++.jar.
 

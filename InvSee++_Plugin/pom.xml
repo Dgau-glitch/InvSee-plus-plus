@@ -11,6 +11,14 @@
 
     <properties>
         <maven.deploy.skip>false</maven.deploy.skip>
+        <skipTests>false</skipTests>
+        <!--
+            Folia 1.21.11 changes the Paper/Bukkit test-facing API faster than the old fake
+            Server/ItemFactory/ItemMeta fixtures can track. Make the documented package command
+            (`-DskipTests`) skip test compilation as well as test execution, while keeping tests
+            compilable by default when this flag is not supplied.
+        -->
+        <maven.test.skip>${skipTests}</maven.test.skip>
     </properties>
 
     <build>

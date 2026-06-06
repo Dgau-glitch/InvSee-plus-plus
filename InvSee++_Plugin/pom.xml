@@ -39,14 +39,6 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>${maven-shade-plugin.version}</version>
 
-                <configuration>
-                    <relocations>
-                        <relocation>
-                            <pattern>org.bstats</pattern>
-                            <shadedPattern>com.janboerman.invsee.bstats</shadedPattern>
-                        </relocation>
-                    </relocations>
-                </configuration>
 
                 <executions>
                     <execution>
@@ -126,21 +118,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- third-party minecraft libraries -->
-        <dependency>
-            <groupId>org.bstats</groupId>
-            <artifactId>bstats-bukkit</artifactId>
-            <version>3.0.2</version>
-            <scope>compile</scope>
-        </dependency>
-        <!-- This is a bit of an odd one: FastStats is vendored in our sources.
-             We may use its own maven dependency in the future whenever Java 8 support is implemented. -->
-        <dependency>
-            <groupId>com.janboerman.invsee</groupId>
-            <artifactId>faststats</artifactId>
-            <version>${project.version}</version>
-            <scope>compile</scope>
-        </dependency>
 
         <!-- first-party libraries -->
         <dependency>

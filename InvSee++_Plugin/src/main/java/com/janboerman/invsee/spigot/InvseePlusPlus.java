@@ -1,6 +1,5 @@
 package com.janboerman.invsee.spigot;
 
-import com.janboerman.invsee.metrics.Metrics;
 import com.janboerman.invsee.paper.AsyncTabCompleter;
 import com.janboerman.invsee.folia.FoliaScheduler;
 import com.janboerman.invsee.spigot.api.CreationOptions;
@@ -59,7 +58,6 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
     private CreationOptions<EnderChestSlot> platformCreationOptionsEnderInventory;
     private boolean dirtyConfig = false;
 
-    private Metrics metrics;
     private volatile boolean shuttingDown;
 
     public InvseePlusPlus() {
@@ -121,9 +119,6 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         //event listeners
         setupEvents(completions);
 
-        //metrics
-        metrics = Metrics.enable(this);
-
         //idea: shoulder look functionality. an admin will always see the same inventory that the target player sees.
         //can I make it so that the bottom slots show the target player's inventory slots? would probably need to do some nms hacking
 
@@ -172,11 +167,6 @@ public class InvseePlusPlus extends JavaPlugin implements com.janboerman.invsee.
         shuttingDown = true;
         if (api != null) { //the api can be null if we are running on unsupported server software.
             api.shutDown(); //complete all inventory futures - ensures /invgive and /endergive will still work even if the server shuts down.
-        }
-
-        if (metrics != null) {
-            metrics.disable();
-            metrics = null;
         }
 	}
 

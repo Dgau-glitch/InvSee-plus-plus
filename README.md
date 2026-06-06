@@ -87,14 +87,6 @@ On 1.20.5 and later:
 - `invseeplusplus.clone.inventory` allows access to `/invclone`.
 - `invseeplusplus.clone.enderchest` allows access to `/enderclone`.
 
-### Statistics
-
-InvSee++ by default sends statistics to [bStats](https://bstats.org/plugin/bukkit/InvseePlusPlus/9309) and [FastStats](https://faststats.dev/project/invsee-plus-plus/invsee%2B%2B).
-The statistics are meant to be anonymous, and they help me with future development.
-If you wish to opt-out of metrics collection, you can edit their config files in /plugins/bStats and /plugin/fastStats.
-
-[![Servers & Players](https://faststats.dev/embed/2cfe5112-d8dc-4b71-8759-c0b0601d0076?w=800&h=300)](https://faststats.dev/project/invsee-plus-plus/invsee++)
-
 ### Contact
 
 Bugs & Feature requests: [GitHub issues](https://github.com/Jannyboy11/InvSee-plus-plus/issues)
@@ -166,11 +158,8 @@ Server support matrix for this Folia-only Maven reactor:
 
 Other server software and Minecraft versions were removed from this Maven reactor. Re-add the relevant modules explicitly if you need legacy CraftBukkit/Paper, 26.x, Glowstone or hybrid-server builds.
 
-[![Historic Minecraft Version Usage](https://faststats.dev/embed/010faaef-face-4f9d-8288-61621c708031?w=800&h=300)](https://faststats.dev/project/invsee-plus-plus/invsee++)
 
 ### Supported Java versions
 | Minecraft version: | 1.21.11      |
 |--------------------|--------------|
 | Java version:      | 21 or newer |
-
-[![Java Versions](https://faststats.dev/embed/dc2e7402-115d-457d-a230-c025ba101968?w=600&h=300)](https://faststats.dev/project/invsee-plus-plus/invsee++)
